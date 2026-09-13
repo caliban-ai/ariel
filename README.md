@@ -65,6 +65,7 @@ channel. The lower of the two wins.
 
 - Design spec: `docs/superpowers/specs/2026-07-03-ariel-chat-bridge-design.md`
   in the caliban-ai umbrella workspace.
+- Decisions: [`docs/adr/`](docs/adr/README.md), the architecture decision log.
 - Tracking: [caliban-ai/prospero#67](https://github.com/caliban-ai/prospero/issues/67).
 
 ## License
