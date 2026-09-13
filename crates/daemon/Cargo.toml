@@ -1,0 +1,22 @@
+[package]
+name = "ariel-daemon"
+description = "arield, the long-running Ariel chat bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "arield"
+path = "src/main.rs"
+
+# Features are additive, never mutually exclusive: they decide which providers
+# can exist in a build. Which provider runs is configuration, not a feature.
+[features]
+default = ["discord"]
+discord = ["dep:ariel-discord"]
+
+[dependencies]
+ariel-core.workspace = true
+ariel-discord = { workspace = true, optional = true }
+clap.workspace = true

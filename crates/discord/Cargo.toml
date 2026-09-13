@@ -1,0 +1,10 @@
+[package]
+name = "ariel-discord"
+description = "Discord backend for the Ariel chat bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ariel-core.workspace = true

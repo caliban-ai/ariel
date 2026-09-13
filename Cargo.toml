@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+repository = "https://github.com/caliban-ai/ariel"
+
+[workspace.dependencies]
+ariel-core = { path = "crates/core" }
+# Chat backends. Each is `optional = true` where it is consumed, so a build
+# without its feature cannot load that platform's SDK.
+ariel-discord = { path = "crates/discord" }
+
+clap = { version = "4", features = ["derive", "env"] }
