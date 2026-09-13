@@ -31,6 +31,7 @@ changes gets a *new* ADR that supersedes the old one, and the old one is marked
 | [0004](0004-provider-trait-and-feature-gated-backends.md) | One chat provider trait, feature-gated backend crates | accepted |
 | [0005](0005-mirror-prospero-wire-types.md) | Mirror prospero's wire types, pinned by golden fixtures | accepted |
 | [0006](0006-chat-provider-trait.md) | The `ChatProvider` trait: one core, capability-gated extras | accepted |
+| [0007](0007-notifications-live-messages-and-pacing.md) | Notifications: one live message per agent, paced per channel | accepted |
 
 ## Adding a new ADR
 
