@@ -1,0 +1,11 @@
+data: {"seq":1,"ts":"2026-06-18T00:00:00+00:00","repo":"caliban","agent_id":"a1","kind":{"kind":"agent_spawned"}}
+
+:
+
+data: {"seq":2,"ts":"2026-06-18T00:00:01+00:00","repo":"caliban","agent_id":"a1","kind":{"kind":"permission_requested","tool":"Bash"}}
+
+event: gap
+data: {"skipped":7,"last_seq":2}
+
+data: {"seq":3,"ts":"2026-06-18T00:00:02+00:00","repo":"caliban","agent_id":"a1","kind":{"kind":"status_changed","from":"running","to":"done"}}
+
