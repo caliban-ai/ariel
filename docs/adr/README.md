@@ -29,6 +29,7 @@ changes gets a *new* ADR that supersedes the old one, and the old one is marked
 | [0002](0002-standalone-service-and-couplings.md) | Standalone service: through prospero, with gonzalo, to caliban only via prospero | accepted |
 | [0003](0003-no-state-of-its-own.md) | Ariel stores nothing of its own; its state is gonzalo records | accepted |
 | [0004](0004-provider-trait-and-feature-gated-backends.md) | One chat provider trait, feature-gated backend crates | accepted |
+| [0005](0005-mirror-prospero-wire-types.md) | Mirror prospero's wire types, pinned by golden fixtures | accepted |
 
 ## Adding a new ADR
 

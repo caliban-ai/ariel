@@ -2,7 +2,7 @@
 //!
 //! Ariel takes no dependency on prospero crates (ADR 0002), so the subset of
 //! prospero's HTTP and SSE contract Ariel reads is mirrored here and pinned by
-//! golden fixtures in `tests/fixtures/prospero/`. Fields Ariel does not use are
+//! golden fixtures in `tests/fixtures/prospero/` (ADR 0005). Fields Ariel does not use are
 //! left out; serde ignores them on decode.
 //!
 //! Every enum Ariel matches on carries an `Unknown` fallback, so a newer
