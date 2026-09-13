@@ -1,0 +1,150 @@
+name: ci
+
+on:
+  # Run on every PR so the required status checks always report. Whether the
+  # cargo steps actually run is decided per-PR by the `changes` step below —
+  # docs-only PRs skip them and the jobs still go green.
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: fmt · clippy · build · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Skip the cargo steps on docs-only PRs (the job still succeeds, so a
+      # required check always reports).
+      - name: Detect non-docs changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only \
+               "${{ github.event.pull_request.base.sha }}" \
+               "${{ github.event.pull_request.head.sha }}" \
+             | grep -vqE '^(docs/|.*\.md$|LICENSE$)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust toolchain
+        if: steps.changes.outputs.code == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry & target
+        if: steps.changes.outputs.code == 'true'
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        if: steps.changes.outputs.code == 'true'
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        if: steps.changes.outputs.code == 'true'
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo build
+        if: steps.changes.outputs.code == 'true'
+        run: cargo build --workspace --all-targets
+
+      - name: cargo test
+        if: steps.changes.outputs.code == 'true'
+        run: cargo test --workspace
+
+      # Features are additive (ADR 0004): a build with no chat backend must
+      # still compile, lint and pass its tests.
+      - name: no-default-features build of ariel-daemon
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          cargo build -p ariel-daemon --no-default-features
+          cargo clippy -p ariel-daemon --all-targets --no-default-features -- -D warnings
+          cargo test -p ariel-daemon --no-default-features
+
+      # Guard the "ariel-core carries no chat platform SDK" property (ADR 0004):
+      # platform code belongs in a feature-gated backend crate.
+      - name: ariel-core pulls no chat platform SDK
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          if cargo tree -p ariel-core -e normal --prefix none \
+               | grep -Ei '^(serenity|twilight|poise|songbird|slack|slack-morphism|teams|botbuilder)[-_ ]'; then
+            echo "::error::ariel-core depends on a chat platform SDK — move it into a backend crate"; exit 1
+          fi
+          echo "ariel-core is chat-SDK-free ✓"
+
+      - name: Docs-only change — Rust CI skipped
+        if: steps.changes.outputs.code != 'true'
+        run: echo "Only docs/markdown/license changed; skipping cargo fmt/clippy/build/test."
+
+  coverage:
+    name: line-coverage gate
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      # llvm-tools-preview provides llvm-cov / llvm-profdata, which cargo-llvm-cov
+      # drives (locally a Homebrew toolchain sets LLVM_COV / LLVM_PROFDATA
+      # instead — see scripts/coverage.sh).
+      - name: Install Rust toolchain
+        if: needs.check.outputs.code == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - name: Cache cargo registry & target
+        if: needs.check.outputs.code == 'true'
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-llvm-cov
+        if: needs.check.outputs.code == 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      # scripts/coverage.sh is the single entrypoint: it writes the LCOV report,
+      # then fails when line coverage drops below COVERAGE_MIN.
+      - name: Run coverage gate
+        if: needs.check.outputs.code == 'true'
+        run: scripts/coverage.sh | tee coverage-summary.txt
+      - name: Coverage summary
+        if: ${{ !cancelled() && needs.check.outputs.code == 'true' }}
+        run: |
+          {
+            echo '### Line coverage'
+            echo '```'
+            grep -E '^(Filename|TOTAL|coverage floor)' coverage-summary.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage report
+        if: ${{ !cancelled() && needs.check.outputs.code == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: target/llvm-cov/lcov.info
+          if-no-files-found: error
+      - name: Docs-only change — coverage skipped
+        if: needs.check.outputs.code != 'true'
+        run: echo "Only docs/markdown/license changed; skipping coverage."
