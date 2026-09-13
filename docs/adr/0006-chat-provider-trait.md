@@ -166,9 +166,27 @@ pub struct Capabilities {
     pub buttons: bool,
     pub threads: bool,
     pub reads_thread_replies: bool,
-    pub limits: Limits, // title, body, fields, per-field, actions, total characters
+    pub limits: Limits,
 }
+
+pub struct Limits {
+    pub title_chars: usize,
+    pub body_chars: usize,
+    pub fields: usize,
+    pub field_chars: usize,
+    pub actions: usize,
+    pub total_chars: usize,
+    pub send_budget: SendBudget,
+}
+
+/// A per-channel token bucket the core paces sends against, before any 429.
+pub struct SendBudget { pub burst: u32, pub per_hour: u32 }
 ```
+
+`send_budget` lets the core pace sends ahead of the platform instead of only
+reacting to throttling: Discord advertises a burst of 5 and 3600 per hour, Slack
+a burst of 3 and 3600 per hour (about one message a second per channel), and
+Teams a burst of 7 and 1800 per hour (its per-conversation hourly cap).
 
 The core applies fallbacks in one place before calling a provider, so a backend
 never receives a message it cannot send:
