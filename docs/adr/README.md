@@ -33,6 +33,7 @@ changes gets a *new* ADR that supersedes the old one, and the old one is marked
 | [0006](0006-chat-provider-trait.md) | The `ChatProvider` trait: one core, capability-gated extras | accepted |
 | [0007](0007-notifications-live-messages-and-pacing.md) | Notifications: one live message per agent, paced per channel | accepted |
 | [0008](0008-secrets-deployment-and-network-boundary.md) | Secrets, deployment, and the boundary around an unauthenticated prosperod | accepted |
+| [0009](0009-channel-config.md) | Channel configuration: what a channel follows, hears, and allows | accepted |
 
 ## Adding a new ADR
 
