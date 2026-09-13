@@ -14,6 +14,7 @@ ariel-core = { path = "crates/core" }
 # without its feature cannot load that platform's SDK.
 ariel-discord = { path = "crates/discord" }
 
+async-trait = "0.1"
 clap = { version = "4", features = ["derive", "env"] }
 futures-util = "0.3"
 # Plain HTTP only for now: prosperod is unauthenticated and binds loopback by
