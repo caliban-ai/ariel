@@ -1,0 +1,15 @@
+[package]
+name = "ariel-cli"
+description = "ariel, the operator CLI for the Ariel chat bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ariel"
+path = "src/main.rs"
+
+[dependencies]
+ariel-core.workspace = true
+clap.workspace = true

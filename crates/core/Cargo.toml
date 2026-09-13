@@ -1,0 +1,11 @@
+[package]
+name = "ariel-core"
+description = "Provider-agnostic core of the Ariel chat bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# ariel-core is always built, so it must never depend on a chat platform SDK.
+# Platform code belongs in a feature-gated backend crate.
+[dependencies]
