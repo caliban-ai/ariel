@@ -8,6 +8,10 @@ repository.workspace = true
 
 # ariel-core is always built, so it must never depend on a chat platform SDK.
 # Platform code belongs in a feature-gated backend crate.
+[features]
+# The shared provider contract suite (ADR 0006), for backends' tests.
+contract-tests = []
+
 [dependencies]
 async-trait.workspace = true
 futures-util.workspace = true
@@ -19,5 +23,8 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+# Enables the contract suite for this crate's own tests, so a plain
+# `cargo test --workspace` runs them.
+ariel-core = { path = ".", features = ["contract-tests"] }
 axum.workspace = true
 tokio = { workspace = true, features = ["net"] }
