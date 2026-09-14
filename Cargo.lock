@@ -64,6 +64,7 @@ dependencies = [
 name = "ariel-core"
 version = "0.1.0"
 dependencies = [
+ "ariel-core",
  "async-trait",
  "axum",
  "futures-util",

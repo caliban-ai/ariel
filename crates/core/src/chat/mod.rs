@@ -15,6 +15,8 @@ use futures_util::stream::BoxStream;
 pub use reqwest::Url;
 
 pub mod console;
+#[cfg(feature = "contract-tests")]
+pub mod contract;
 
 /// Which chat platform, e.g. `discord`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
