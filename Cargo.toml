@@ -15,6 +15,7 @@ ariel-core = { path = "crates/core" }
 ariel-discord = { path = "crates/discord" }
 
 async-trait = "0.1"
+axum = "0.8"
 clap = { version = "4", features = ["derive", "env"] }
 futures-util = "0.3"
 # Plain HTTP only for now: prosperod is unauthenticated and binds loopback by
@@ -25,6 +26,3 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 tracing = "0.1"
-
-# Test-only.
-axum = "0.8"
