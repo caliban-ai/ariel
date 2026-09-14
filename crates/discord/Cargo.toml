@@ -8,3 +8,18 @@ repository.workspace = true
 
 [dependencies]
 ariel-core.workspace = true
+async-trait.workspace = true
+futures-util.workspace = true
+rustls.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+twilight-gateway.workspace = true
+twilight-http.workspace = true
+twilight-model.workspace = true
+twilight-util.workspace = true
+
+[dev-dependencies]
+ariel-core = { workspace = true, features = ["contract-tests"] }
+axum.workspace = true
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }

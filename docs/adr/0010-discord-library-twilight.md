@@ -38,9 +38,15 @@ connection, `twilight-http` for REST calls and interaction responses, and
 - The backend owns its event loop: it reads Gateway events, turns interactions
   into `Inbound` events with a responder, and meets Discord's three-second
   interaction deadline by deferring on the core's behalf (ADR 0006).
-- Backend behaviour is verified by the shared provider contract suite, run
-  against a stub of Discord's REST API, plus a documented manual smoke test in a
-  test guild.
+- **TLS.** twilight enables no rustls crypto provider, and building a client
+  without one panics. `ariel-discord` pins rustls 0.23 with the `ring` provider
+  and installs it before building any client, which also keeps aws-lc's C
+  build out of the dependency tree.
+- **Testing.** Backend behaviour is verified by the shared provider contract
+  suite. The REST client is pointed at a local stub of Discord's API over plain
+  HTTP, with twilight's rate limiter turned off, and interactions are fed in
+  through the same entry point the Gateway loop uses. The Gateway connection
+  itself is covered by a documented manual smoke test in a test guild.
 
 ## Consequences
 
@@ -53,7 +59,11 @@ connection, `twilight-http` for REST calls and interaction responses, and
 - **Negative:** More code in the backend: the Gateway event loop, reconnection
   handling at the application level, and interaction response bookkeeping that a
   framework would provide. twilight's lower-level API makes Discord's protocol
-  details visible to whoever maintains the backend.
+  details visible to whoever maintains the backend. twilight's REST client
+  waits on Discord's rate-limit buckets and retries 429 responses itself, so
+  the backend never returns `ProviderError::RateLimited` as ADR 0006
+  anticipates; ADR 0007's proactive `send_budget` pacing is the real guard
+  against flooding a channel.
 - **Revisit if:** twilight's maintenance stalls, a twilight release makes the
   backend substantially harder to keep thin, or serenity's next major version
   removes the migration risk while offering something the backend needs.
