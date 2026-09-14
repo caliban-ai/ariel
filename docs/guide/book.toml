@@ -1,0 +1,20 @@
+[book]
+title = "ariel"
+description = "Chat bridge for the caliban fleet."
+authors = ["caliban-ai"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/caliban-ai/ariel"
+preferred-dark-theme = "navy"
+additional-css = ["theme/caliban-ai.css"]
+additional-js = ["theme/nav.js"]
+no-section-label = true
+
+[output.html.search]
+enable = true
