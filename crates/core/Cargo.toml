@@ -15,6 +15,9 @@ contract-tests = []
 [dependencies]
 async-trait.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
+# `remote` brings ServerStore, the HTTP client for gonzalod.
+gonzalo = { workspace = true, features = ["remote"] }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -27,4 +30,7 @@ tracing.workspace = true
 # `cargo test --workspace` runs them.
 ariel-core = { path = ".", features = ["contract-tests"] }
 axum.workspace = true
+# Tests use gonzalo's filesystem store in a temporary directory.
+gonzalo = { workspace = true, features = ["fs"] }
+tempfile.workspace = true
 tokio = { workspace = true, features = ["net"] }

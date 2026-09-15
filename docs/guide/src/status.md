@@ -39,6 +39,12 @@ the channel, the lower of the two winning
 - Mirrored prospero wire types pinned by golden fixtures from prospero v0.7.0
   ([ADR 0005](./adr/0005-mirror-prospero-wire-types.md)).
 - The renderer: `AgentView`, `render_agent`, `render_summary`.
+- `Records`, the gonzalo client for access-control records: typed create, read,
+  update, delete and list for people, identity bindings, role grants, channel
+  configuration and link tokens, and append-only audit entries, over gonzalod
+  (`ServerStore`) or a local `FsStore`. A lost write race is an ordinary
+  `Write::Conflict` carrying the winning record
+  ([gonzalo compatibility](./configuration.md#gonzalo-compatibility)).
 
 **`ariel-discord`** ([ADR 0010](./adr/0010-discord-library-twilight.md))
 
@@ -79,11 +85,10 @@ One thin thread through every seam, Discord only.
 
 | Issue | Work | Blocked by |
 |---|---|---|
-| [#19](https://github.com/caliban-ai/ariel/issues/19) | Wire `arield`: Discord, prosperod and gonzalod connections, fleet notifications to configured channels | #15 |
-| [#15](https://github.com/caliban-ai/ariel/issues/15) | gonzalo client for access-control records | gonzalo#277, gonzalo#278 and a gonzalo release |
-| [#16](https://github.com/caliban-ai/ariel/issues/16) | Account linking: `ariel link new` and `/ariel link` | #15, gonzalod auth |
-| [#17](https://github.com/caliban-ai/ariel/issues/17) | Two-key command authorization and audit trail | #15, gonzalod auth |
-| [#18](https://github.com/caliban-ai/ariel/issues/18) | `ariel` CLI for channel configuration | #15 |
+| [#19](https://github.com/caliban-ai/ariel/issues/19) | Wire `arield`: Discord, prosperod and gonzalod connections, fleet notifications to configured channels | — |
+| [#16](https://github.com/caliban-ai/ariel/issues/16) | Account linking: `ariel link new` and `/ariel link` | gonzalod auth |
+| [#17](https://github.com/caliban-ai/ariel/issues/17) | Two-key command authorization and audit trail | gonzalod auth |
+| [#18](https://github.com/caliban-ai/ariel/issues/18) | `ariel` CLI for channel configuration | — |
 | [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | #16, #17, #19 |
 | [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #19, #20 |
 
@@ -93,11 +98,10 @@ and a published release.
 
 ## Blocked upstream
 
-- **Identity layer.** The gonzalo record kinds for people, bindings, grants,
-  channel configuration, link tokens and audit are being designed in
-  [caliban-ai/gonzalo#277](https://github.com/caliban-ai/gonzalo/issues/277) and
-  implemented in [#278](https://github.com/caliban-ai/gonzalo/issues/278).
-  Everything that reads or writes those records waits on a gonzalo release.
+- **A gonzalo release.** The access-control record kinds landed in gonzalo
+  ([caliban-ai/gonzalo#296](https://github.com/caliban-ai/gonzalo/pull/296)) but
+  are not released yet, so Ariel pins gonzalo to that commit from git. Ariel
+  moves to the crates.io release once one carries them.
 - **gonzalod authentication.** Account linking and authorization wait until
   gonzalod runs with auth on in the deployment
   ([ADR 0008](./adr/0008-secrets-deployment-and-network-boundary.md)).
