@@ -38,6 +38,22 @@ a mounted Kubernetes Secret, named by an `ARIEL_*_TOKEN_FILE` variable.
 
 Rotating a token means replacing the file and restarting `arield`.
 
+## gonzalo compatibility
+
+Ariel keeps its people, bindings, role grants, channel configuration, link tokens
+and audit trail as gonzalo records
+([ADR 0003](./adr/0003-no-state-of-its-own.md)). Those record kinds are defined by
+gonzalo ADR 0022.
+
+- **Minimum gonzalo:** commit `f537da7`
+  ([caliban-ai/gonzalo#296](https://github.com/caliban-ai/gonzalo/pull/296)), the
+  first to carry the access-control kinds. No release includes it yet: gonzalo
+  0.6.0 and earlier do not, and Ariel depends on gonzalo from git at that commit
+  until one does.
+- **Upgrade gonzalo first.** A gonzalod, or any gonzalo peer that syncs with it,
+  older than that cannot decode these kinds. Upgrade every gonzalo binary that
+  will hold or sync Ariel's records before `arield` writes one.
+
 ## Health endpoint
 
 `GET /healthz` answers `200` with body `ok`; every other path is `404`. It

@@ -6,4 +6,5 @@
 
 pub mod chat;
 pub mod prospero;
+pub mod records;
 pub mod render;
