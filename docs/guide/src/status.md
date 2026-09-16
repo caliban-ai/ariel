@@ -112,12 +112,6 @@ and a published release.
 
 ## Blocked upstream
 
-- **A gonzalo release.** The access-control record kinds landed in gonzalo
-  ([caliban-ai/gonzalo#296](https://github.com/caliban-ai/gonzalo/pull/296),
-  with channel configuration completed in
-  [#297](https://github.com/caliban-ai/gonzalo/pull/297)) but
-  are not released yet, so Ariel pins gonzalo to that commit from git. Ariel
-  moves to the crates.io release once one carries them.
 - **gonzalod authentication.** Account linking and authorization wait until
   gonzalod runs with auth on in the deployment
   ([ADR 0008](./adr/0008-secrets-deployment-and-network-boundary.md)).

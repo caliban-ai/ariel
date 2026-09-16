@@ -647,8 +647,9 @@ dependencies = [
 
 [[package]]
 name = "gonzalo"
-version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ca3d21943436d7890677cffe1f33c9e51eac846b6bb62fe187335b1d8df430d"
 dependencies = [
  "gonzalo-core",
  "gonzalo-domain",
@@ -658,8 +659,9 @@ dependencies = [
 
 [[package]]
 name = "gonzalo-core"
-version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8464cc93ede8a10ca999a7fb728ccc179660e10e037ce54f2330fb2cc0833fd"
 dependencies = [
  "async-trait",
  "blake3",
@@ -670,8 +672,9 @@ dependencies = [
 
 [[package]]
 name = "gonzalo-domain"
-version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a318dfd9db57f72e1b8f6d748533839b573087c50b3654c707d9025f77df2a4f"
 dependencies = [
  "gonzalo-core",
  "serde",
@@ -680,8 +683,9 @@ dependencies = [
 
 [[package]]
 name = "gonzalo-proto"
-version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55b90a1ccb3700dcb8d20453c21dfc87fd79234773898f9ff7b419a2265cb4b7"
 dependencies = [
  "gonzalo-core",
  "prost",
@@ -693,8 +697,9 @@ dependencies = [
 
 [[package]]
 name = "gonzalo-store-fs"
-version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45b0d55766f5e0e2ff64f56781cae5df14b6dd8601f3b390fd33149385b64312"
 dependencies = [
  "async-trait",
  "gonzalo-core",
@@ -705,8 +710,9 @@ dependencies = [
 
 [[package]]
 name = "gonzalo-store-server"
-version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3e6ca779ce727400ea2c99de159b2e31300cc03c9182900de2bdc171189b5be"
 dependencies = [
  "async-trait",
  "gonzalo-core",
