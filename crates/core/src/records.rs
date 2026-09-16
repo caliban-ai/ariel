@@ -297,7 +297,8 @@ fn random_nonce() -> Result<String> {
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-fn now_ms() -> i64 {
+/// Milliseconds since the Unix epoch, as gonzalo records timestamps.
+pub(crate) fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
