@@ -6,6 +6,7 @@
 
 pub mod channels;
 pub mod chat;
+pub mod link;
 pub mod notify;
 pub mod prospero;
 pub mod records;

@@ -14,12 +14,15 @@
 
 use std::future::Future;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use ariel_core::chat::{ChatProvider, ProviderId};
+use ariel_core::chat::{ChatProvider, Inbound, Message, ProviderId, Visibility};
+use ariel_core::link;
 use ariel_core::notify::{Notifier, NotifyConfig, Route};
 use ariel_core::prospero::{FleetWatcher, ProsperoClient, WatchConfig};
 use ariel_core::records::gonzalo::ChannelConfig;
 use ariel_core::records::{Records, RecordsError};
+use futures_util::StreamExt;
 
 /// How many fleet events may queue for one channel before the watcher waits.
 const CHANNEL_BUFFER: usize = 256;
@@ -94,6 +97,13 @@ pub async fn run(
         .map(|route| Notifier::new(provider.clone(), route, notify.clone()).spawn(CHANNEL_BUFFER))
         .collect();
 
+    // Commands. Only `/ariel link` exists so far (#16); a registration failure is
+    // logged rather than fatal, so notifications keep flowing.
+    if let Err(error) = provider.register_commands(&[link::COMMAND]).await {
+        tracing::warn!(%error, "could not register chat commands");
+    }
+    let commands = tokio::spawn(dispatch(provider.clone(), records.clone()));
+
     let (mut events, watcher) = FleetWatcher::new(prospero, watch).spawn(FLEET_BUFFER);
     let mut shutdown = std::pin::pin!(shutdown);
     loop {
@@ -116,5 +126,37 @@ pub async fn run(
     drop(senders);
     drop(events);
     watcher.abort();
+    commands.abort();
     Ok(())
+}
+
+/// Answer commands as they arrive, each on its own task so a slow one never
+/// holds up the next.
+async fn dispatch(provider: Arc<dyn ChatProvider>, records: Records) {
+    let mut inbound = provider.inbound();
+    while let Some(item) = inbound.next().await {
+        let Inbound::Command(command) = item else {
+            continue;
+        };
+        let records = records.clone();
+        tokio::spawn(async move {
+            if command.name == link::COMMAND.name {
+                link::respond(&records, &command, now_ms()).await;
+                return;
+            }
+            // Registered commands only reach here once #20 defines more of them.
+            let reply = Message::text(format!("`/ariel {}` is not available yet.", command.name));
+            if let Err(error) = command.responder.reply(&reply, Visibility::Private).await {
+                tracing::warn!(%error, command = %command.name, "could not answer a command");
+            }
+        });
+    }
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| {
+            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+        })
 }
