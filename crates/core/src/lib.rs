@@ -5,6 +5,7 @@
 //! each platform lives in its own feature-gated backend crate.
 
 pub mod chat;
+pub mod notify;
 pub mod prospero;
 pub mod records;
 pub mod render;

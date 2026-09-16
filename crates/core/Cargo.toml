@@ -33,4 +33,4 @@ axum.workspace = true
 # Tests use gonzalo's filesystem store in a temporary directory.
 gonzalo = { workspace = true, features = ["fs"] }
 tempfile.workspace = true
-tokio = { workspace = true, features = ["net"] }
+tokio = { workspace = true, features = ["net", "test-util"] }
