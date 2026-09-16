@@ -167,3 +167,59 @@ fn arield_exits_non_zero_on_a_bad_token_file_without_printing_tokens() {
         "token printed"
     );
 }
+
+#[test]
+fn service_urls_and_discord_ids_are_read_from_the_environment() {
+    let config = Config::from_lookup(lookup(&[
+        ("ARIEL_PROSPERO_URL", "http://prosperod.caliban:8080"),
+        ("ARIEL_GONZALO_URL", "http://gonzalod.caliban:7000"),
+        ("ARIEL_DASHBOARD_URL", "https://fleet.example.com/"),
+        ("ARIEL_DISCORD_GUILD_ID", "123"),
+        ("ARIEL_DISCORD_APPLICATION_ID", "456"),
+    ]))
+    .unwrap();
+
+    assert_eq!(
+        config.prospero_url.as_deref(),
+        Some("http://prosperod.caliban:8080")
+    );
+    assert_eq!(
+        config.gonzalo_url.as_deref(),
+        Some("http://gonzalod.caliban:7000")
+    );
+    assert_eq!(
+        config.dashboard_url.as_ref().map(ToString::to_string),
+        Some("https://fleet.example.com/".to_owned())
+    );
+    assert_eq!(config.discord_guild_id, Some(123));
+    assert_eq!(config.discord_application_id, Some(456));
+}
+
+#[test]
+fn unset_service_urls_are_none() {
+    let config = Config::from_lookup(lookup(&[])).unwrap();
+    assert!(config.prospero_url.is_none());
+    assert!(config.gonzalo_url.is_none());
+    assert!(config.dashboard_url.is_none());
+    assert!(config.discord_guild_id.is_none());
+    assert!(config.discord_application_id.is_none());
+}
+
+#[test]
+fn a_discord_id_that_is_not_a_snowflake_is_an_error_naming_the_variable() {
+    let error = Config::from_lookup(lookup(&[("ARIEL_DISCORD_GUILD_ID", "my-guild")]))
+        .expect_err("a Discord ID is numeric");
+    assert!(matches!(error, ConfigError::Snowflake { .. }), "{error}");
+    assert!(
+        error.to_string().contains("ARIEL_DISCORD_GUILD_ID"),
+        "{error}"
+    );
+}
+
+#[test]
+fn a_dashboard_that_is_not_a_url_is_an_error_naming_the_variable() {
+    let error = Config::from_lookup(lookup(&[("ARIEL_DASHBOARD_URL", "fleet-dashboard")]))
+        .expect_err("a bare word is not a URL");
+    assert!(matches!(error, ConfigError::DashboardUrl { .. }), "{error}");
+    assert!(error.to_string().contains("ARIEL_DASHBOARD_URL"), "{error}");
+}

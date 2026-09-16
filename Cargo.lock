@@ -117,9 +117,13 @@ dependencies = [
  "ariel-discord",
  "axum 0.8.9",
  "clap",
+ "gonzalo",
  "reqwest 0.13.5",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

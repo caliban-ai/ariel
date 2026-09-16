@@ -12,7 +12,7 @@ Ariel is designed as one bridge at four depths, each shippable on its own.
 
 | Layer | Direction | What it does | State |
 |---|---|---|---|
-| Notifications | out | Agent started, changed status, finished | **Building blocks done.** Fleet watcher and renderer exist; the paced notifier and daemon wiring are next (#19). |
+| Notifications | out | Agent started, changed status, finished | **Built.** `arield` watches the fleet and posts a live message per agent to every channel configured to follow its workspace. |
 | ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Plumbing done.** Discord registers and receives `/ariel` subcommands, and the prospero client can spawn, kill and respawn. No commands are defined yet (#20). |
 | Approvals | both, narrow | Approve or deny a risky action with buttons | **Designed, deferred** (#6). Blocked on upstream caliban and prospero work. |
 | Conversational | both, full | A chat thread is an agent session | **Designed, deferred** (#7). |
@@ -39,6 +39,11 @@ the channel, the lower of the two winning
 - Mirrored prospero wire types pinned by golden fixtures from prospero v0.7.0
   ([ADR 0005](./adr/0005-mirror-prospero-wire-types.md)).
 - The renderer: `AgentView`, `render_agent`, `render_summary`.
+- The notifier: one live message per agent, edited in place; burst summaries;
+  routing by what a channel follows and its notify preset; and sends paced
+  against the provider's own budget, with rate limits, lost access and deleted
+  messages handled ([ADR 0007](./adr/0007-notifications-live-messages-and-pacing.md),
+  [ADR 0009](./adr/0009-channel-config.md)).
 - `Records`, the gonzalo client for access-control records: typed create, read,
   update, delete and list for people, identity bindings, role grants, channel
   configuration and link tokens, and append-only audit entries, over gonzalod
@@ -62,9 +67,14 @@ the channel, the lower of the two winning
 
 **`arield`**
 
-- Reads `ARIEL_DISCORD_TOKEN_FILE`, `ARIEL_GONZALO_TOKEN_FILE` and
-  `ARIEL_HEALTH_ADDR`, failing at startup on an unreadable or empty credential
-  file ([Configuration](./configuration.md)).
+- Reads its configuration from the environment, failing at startup on an
+  unreadable or empty credential file, a bad address, a non-URL dashboard or a
+  non-numeric Discord ID ([Configuration](./configuration.md)).
+- Connects to prosperod, gonzalod and Discord, reads the channel configuration
+  records belonging to the running provider, and notifies each channel that
+  follows an event's workspace. Without those settings it serves health only.
+- Does not replay what it missed across a restart
+  ([ADR 0011](./adr/0011-no-replay-after-a-restart.md)).
 - Prints the chat providers compiled into the build.
 - Serves `GET /healthz` and shuts down cleanly on Ctrl-C or SIGTERM.
 
@@ -85,12 +95,11 @@ One thin thread through every seam, Discord only.
 
 | Issue | Work | Blocked by |
 |---|---|---|
-| [#19](https://github.com/caliban-ai/ariel/issues/19) | Wire `arield`: Discord, prosperod and gonzalod connections, fleet notifications to configured channels | — |
 | [#16](https://github.com/caliban-ai/ariel/issues/16) | Account linking: `ariel link new` and `/ariel link` | gonzalod auth |
 | [#17](https://github.com/caliban-ai/ariel/issues/17) | Two-key command authorization and audit trail | gonzalod auth |
 | [#18](https://github.com/caliban-ai/ariel/issues/18) | `ariel` CLI for channel configuration | — |
-| [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | #16, #17, #19 |
-| [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #19, #20 |
+| [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | #16, #17 |
+| [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #20 |
 
 Not yet decided or built, and not scheduled: the Slack and Teams backends, core
 message fallbacks (truncation, dropping actions when a platform has no buttons),
