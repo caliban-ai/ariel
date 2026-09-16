@@ -64,13 +64,9 @@ and audit trail as gonzalo records
 ([ADR 0003](./adr/0003-no-state-of-its-own.md)). Those record kinds are defined by
 gonzalo ADR 0022, and the channel configuration record by gonzalo ADR 0023.
 
-- **Minimum gonzalo:** commit `e1bf8c7`
-  ([caliban-ai/gonzalo#297](https://github.com/caliban-ai/gonzalo/pull/297)),
-  which gave `ChannelConfig` the fields [ADR 0009](./adr/0009-channel-config.md)
-  specifies. The kinds themselves arrived in
-  [#296](https://github.com/caliban-ai/gonzalo/pull/296). No release carries
-  either: gonzalo 0.6.0 and earlier cannot decode these kinds, so Ariel pins
-  that commit until a release does.
+- **Minimum gonzalo: 0.7.0**, the first release carrying the access-control
+  record kinds ([gonzalo v0.7.0](https://github.com/caliban-ai/gonzalo/releases/tag/v0.7.0)).
+  0.6.0 and earlier cannot decode them.
 - **Upgrade gonzalo first.** A gonzalod, or any gonzalo peer that syncs with it,
   older than that cannot decode these kinds. Upgrade every gonzalo binary that
   will hold or sync Ariel's records before `arield` writes one.
