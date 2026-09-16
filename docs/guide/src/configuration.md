@@ -43,13 +43,15 @@ Rotating a token means replacing the file and restarting `arield`.
 Ariel keeps its people, bindings, role grants, channel configuration, link tokens
 and audit trail as gonzalo records
 ([ADR 0003](./adr/0003-no-state-of-its-own.md)). Those record kinds are defined by
-gonzalo ADR 0022.
+gonzalo ADR 0022, and the channel configuration record by gonzalo ADR 0023.
 
-- **Minimum gonzalo:** commit `f537da7`
-  ([caliban-ai/gonzalo#296](https://github.com/caliban-ai/gonzalo/pull/296)), the
-  first to carry the access-control kinds. No release includes it yet: gonzalo
-  0.6.0 and earlier do not, and Ariel depends on gonzalo from git at that commit
-  until one does.
+- **Minimum gonzalo:** commit `e1bf8c7`
+  ([caliban-ai/gonzalo#297](https://github.com/caliban-ai/gonzalo/pull/297)),
+  which gave `ChannelConfig` the fields [ADR 0009](./adr/0009-channel-config.md)
+  specifies. The kinds themselves arrived in
+  [#296](https://github.com/caliban-ai/gonzalo/pull/296). No release carries
+  either: gonzalo 0.6.0 and earlier cannot decode these kinds, so Ariel pins
+  that commit until a release does.
 - **Upgrade gonzalo first.** A gonzalod, or any gonzalo peer that syncs with it,
   older than that cannot decode these kinds. Upgrade every gonzalo binary that
   will hold or sync Ariel's records before `arield` writes one.
