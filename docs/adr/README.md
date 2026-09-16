@@ -35,6 +35,7 @@ changes gets a *new* ADR that supersedes the old one, and the old one is marked
 | [0008](0008-secrets-deployment-and-network-boundary.md) | Secrets, deployment, and the boundary around an unauthenticated prosperod | accepted |
 | [0009](0009-channel-config.md) | Channel configuration: what a channel follows, hears, and allows | accepted |
 | [0010](0010-discord-library-twilight.md) | Discord backend on twilight | accepted |
+| [0011](0011-no-replay-after-a-restart.md) | A restarted daemon does not replay what it missed | accepted |
 
 ## Adding a new ADR
 

@@ -29,6 +29,12 @@ axum.workspace = true
 clap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "signal"] }
+tracing.workspace = true
 
 [dev-dependencies]
+# The wiring test runs the bridge against a stub prosperod, channel records in
+# gonzalo's filesystem store, and the console provider.
+gonzalo = { workspace = true, features = ["fs"] }
 reqwest.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

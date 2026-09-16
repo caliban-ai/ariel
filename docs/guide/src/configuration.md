@@ -10,12 +10,31 @@ configuration file and no command-line options beyond `--help` and `--version`.
 | `ARIEL_HEALTH_ADDR` | `0.0.0.0:8081` | Socket address `/healthz` is served on. A value that is not a socket address (for example a bare port) stops `arield` at startup. |
 | `ARIEL_DISCORD_TOKEN_FILE` | unset | Path to a file holding the Discord bot token. |
 | `ARIEL_GONZALO_TOKEN_FILE` | unset | Path to a file holding `arield`'s bearer token for gonzalod. |
+| `ARIEL_PROSPERO_URL` | unset | prosperod's base URL, for example `http://prosperod:8080`. |
+| `ARIEL_GONZALO_URL` | unset | gonzalod's base URL, where the channel and access-control records live. |
+| `ARIEL_DASHBOARD_URL` | unset | Linked from every notification. A value that is not a URL stops `arield` at startup. |
+| `ARIEL_DISCORD_GUILD_ID` | unset | The guild `/ariel` is registered in. Numeric; anything else stops `arield` at startup. |
+| `ARIEL_DISCORD_APPLICATION_ID` | unset | The Discord application answering interactions. Numeric. |
 
-Both credential files are **read and validated at startup but not used yet**:
-`arield` does not connect to Discord or gonzalod until the daemon wiring lands
-([#19](https://github.com/caliban-ai/ariel/issues/19)). Settings the wiring will
-need, such as the prosperod and gonzalod URLs and the Discord guild and
-application IDs, do not exist yet.
+### What `arield` does with less than all of it
+
+`arield` always serves `/healthz`. The bridge itself needs prosperod, gonzalod
+and a chat provider:
+
+- **Without `ARIEL_PROSPERO_URL` or `ARIEL_GONZALO_URL`** it serves health only,
+  and says so on startup.
+- **Without a complete Discord configuration** (token file, guild ID and
+  application ID) there is no chat provider, so it serves health only.
+- **With all of it**, it reads every channel configuration record belonging to
+  the running provider, watches the fleet, and notifies each channel that follows
+  an event's workspace. A channel record naming another provider is skipped: it
+  belongs to a different backend in the same fleet.
+- **With no channel records at all** it runs and notifies nothing, logging a
+  warning.
+
+After a restart it does not replay what it missed
+([ADR 0011](./adr/0011-no-replay-after-a-restart.md)): agents already finished
+are not announced, and each running agent gets a fresh live message.
 
 ## Credentials are files
 
