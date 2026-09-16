@@ -27,6 +27,7 @@ ariel-core.workspace = true
 ariel-discord = { workspace = true, optional = true }
 axum.workspace = true
 clap.workspace = true
+futures-util.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "signal"] }
 tracing.workspace = true

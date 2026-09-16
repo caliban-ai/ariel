@@ -153,7 +153,11 @@ fn provider(config: &Config) -> Result<Option<Arc<dyn ChatProvider>>, WiringErro
         api_proxy: None,
     })
     .map_err(|error| WiringError::Provider(format!("discord: {error}")))?;
-    Ok(Some(Arc::new(discord)))
+    let discord = Arc::new(discord);
+    // Commands and interactions arrive over the Gateway connection; without it
+    // `/ariel link` would never reach the bridge. Sending needs only REST.
+    tokio::spawn(Arc::clone(&discord).run_gateway());
+    Ok(Some(discord))
 }
 
 #[cfg(not(feature = "discord"))]

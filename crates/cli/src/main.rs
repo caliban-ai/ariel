@@ -9,9 +9,10 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use ariel_core::channels::{self, Applied, ChannelKey, ChannelPatch, ChannelsError};
+use ariel_core::link::{self, LinkError, MintRequest};
 use ariel_core::records::Records;
 use ariel_core::records::gonzalo::{
-    ChannelConfig, FleetActor, FleetRole, Follows, FsStore, Identity, NotifyPreset,
+    ChannelConfig, FleetActor, FleetRole, Follows, FsStore, GrantScope, Identity, NotifyPreset,
 };
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -32,6 +33,34 @@ enum Command {
     Channel {
         #[command(subcommand)]
         action: ChannelAction,
+    },
+    /// Link chat accounts to fleet identities.
+    Link {
+        #[command(subcommand)]
+        action: LinkAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum LinkAction {
+    /// Mint a one-time token that grants a role when redeemed in chat with
+    /// `/ariel link <token>`.
+    New {
+        /// The role the redeeming person receives.
+        #[arg(long)]
+        role: RoleArg,
+        /// Grant the role in this workspace only. Without it, the grant is
+        /// fleet-wide.
+        #[arg(long)]
+        workspace: Option<String>,
+        /// Link to this existing person id instead of creating a new person.
+        #[arg(long)]
+        person: Option<String>,
+        /// How many hours the token stays redeemable.
+        #[arg(long, default_value_t = 24)]
+        expires_hours: u64,
+        #[command(flatten)]
+        store: StoreArgs,
     },
 }
 
@@ -137,6 +166,8 @@ enum CliError {
     NoWorkspaces,
     #[error(transparent)]
     Channels(#[from] ChannelsError),
+    #[error(transparent)]
+    Link(#[from] LinkError),
     #[error("{0}")]
     Records(String),
     #[error("{provider}/{tenant}/{channel} is not configured")]
@@ -159,7 +190,10 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: Cli) -> Result<ExitCode, CliError> {
-    let Command::Channel { action } = cli.command;
+    let action = match cli.command {
+        Command::Channel { action } => action,
+        Command::Link { action } => return run_link(action).await,
+    };
     match action {
         ChannelAction::Show { channel, store } => {
             let records = open(&store)?;
@@ -192,6 +226,53 @@ async fn run(cli: Cli) -> Result<ExitCode, CliError> {
             Ok(report(&applied))
         }
     }
+}
+
+async fn run_link(action: LinkAction) -> Result<ExitCode, CliError> {
+    let LinkAction::New {
+        role,
+        workspace,
+        person,
+        expires_hours,
+        store,
+    } = action;
+    let records = open(&store)?;
+    let scope = match workspace {
+        Some(name) => GrantScope::Workspace(name),
+        None => GrantScope::Fleet,
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| {
+            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+        });
+    let minted = link::mint(
+        &records,
+        MintRequest {
+            role: role.into(),
+            scope: scope.clone(),
+            person,
+            ttl: std::time::Duration::from_secs(expires_hours.saturating_mul(3600)),
+            minted_by: FleetActor::Service("ariel-cli".to_owned()),
+        },
+        now,
+    )
+    .await?;
+
+    let grant = match &scope {
+        GrantScope::Fleet => "across the fleet".to_owned(),
+        GrantScope::Workspace(name) => format!("in workspace {name}"),
+    };
+    println!("Link token (shown once; give it to the person privately):");
+    println!();
+    println!("  {}", minted.token);
+    println!();
+    println!(
+        "It grants {} {grant}, and expires in {expires_hours}h.",
+        format!("{role:?}").to_lowercase()
+    );
+    println!("Redeem it in chat with: /ariel link <token>");
+    Ok(ExitCode::SUCCESS)
 }
 
 fn key(args: &ChannelArgs) -> ChannelKey {

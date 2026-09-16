@@ -13,7 +13,7 @@ Ariel is designed as one bridge at four depths, each shippable on its own.
 | Layer | Direction | What it does | State |
 |---|---|---|---|
 | Notifications | out | Agent started, changed status, finished | **Built.** `arield` watches the fleet and posts a live message per agent to every channel configured to follow its workspace. |
-| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Plumbing done.** Discord registers and receives `/ariel` subcommands, and the prospero client can spawn, kill and respawn. No commands are defined yet (#20). |
+| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Plumbing done.** Discord registers and receives `/ariel` subcommands, and the prospero client can spawn, kill and respawn. `/ariel link` works; the fleet commands are next (#20). |
 | Approvals | both, narrow | Approve or deny a risky action with buttons | **Designed, deferred** (#6). Blocked on upstream caliban and prospero work. |
 | Conversational | both, full | A chat thread is an agent session | **Designed, deferred** (#7). |
 
@@ -75,6 +75,8 @@ yet (#20).
 - Connects to prosperod, gonzalod and Discord, reads the channel configuration
   records belonging to the running provider, and notifies each channel that
   follows an event's workspace. Without those settings it serves health only.
+- Registers `/ariel link` and answers it privately, linking the account and
+  granting the token's role.
 - Does not replay what it missed across a restart
   ([ADR 0011](./adr/0011-no-replay-after-a-restart.md)).
 - Prints the chat providers compiled into the build.
@@ -86,6 +88,9 @@ yet (#20).
   record: what it follows, how much it hears and its command ceiling
   ([The `ariel` CLI](./cli.md)). Changes are audited, and a concurrent edit is
   reported as a conflict instead of overwriting what is stored.
+- `ariel link new` mints a one-time link token that grants a role when redeemed
+  in chat with `/ariel link`; only its hash is stored, and it works once
+  ([The `ariel` CLI](./cli.md#link-a-chat-account)).
 - Acts on gonzalod, or on a local gonzalo store with `--store`.
 
 **Build and release**
@@ -103,8 +108,7 @@ One thin thread through every seam, Discord only.
 
 | Issue | Work | Blocked by |
 |---|---|---|
-| [#16](https://github.com/caliban-ai/ariel/issues/16) | Account linking: `ariel link new` and `/ariel link` | gonzalod auth |
-| [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | #16 |
+| [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | — |
 | [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #20 |
 
 Not yet decided or built, and not scheduled: the Slack and Teams backends, core

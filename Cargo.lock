@@ -122,6 +122,7 @@ dependencies = [
  "ariel-discord",
  "axum 0.8.9",
  "clap",
+ "futures-util",
  "gonzalo",
  "reqwest 0.13.5",
  "serde_json",

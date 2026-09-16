@@ -1,6 +1,6 @@
 # The `ariel` CLI
 
-`ariel` is the operator command. Today it manages **channel configuration**: the
+`ariel` is the operator command. It manages **channel configuration** and mints **link tokens**. Channel configuration is the
 record that decides which workspaces a chat channel follows, how much it hears,
 and the highest role a command run there can have
 ([ADR 0009](./adr/0009-channel-config.md)).
@@ -89,3 +89,46 @@ Creating or changing a channel appends an audit entry to gonzalo's `fleet-audit`
 namespace, naming the actor, the action (`channel.create` or `channel.update`),
 the record, and whether it succeeded. A command that changes nothing is not
 audited.
+
+## Link a chat account
+
+Before anyone can run a command, Ariel has to know which person a chat account
+belongs to. An administrator mints a **one-time link token**, and the person
+redeems it in chat.
+
+```console
+$ ariel link new --role operator --workspace caliban
+Link token (shown once; give it to the person privately):
+
+  3f9c…e21a
+
+It grants operator in workspace caliban, and expires in 24h.
+Redeem it in chat with: /ariel link <token>
+```
+
+| Flag | Meaning |
+|---|---|
+| `--role` | `viewer`, `operator` or `admin`. Required. |
+| `--workspace` | Grant the role in this workspace only. Without it the grant is fleet-wide. |
+| `--person` | Link to an existing person id rather than creating a new person. |
+| `--expires-hours` | How long the token stays redeemable. Defaults to 24. |
+
+The person then runs `/ariel link <token>` anywhere in chat. Ariel binds their
+account to a person, grants the role, and **replies only to them**, without
+repeating the token.
+
+- **The token is shown once.** Only a hash of it is stored; it appears in no
+  record or audit entry.
+- **It works once.** Two people redeeming the same token at the same moment get
+  one success and one "already used".
+- **It expires.** An expired token links nothing.
+- **Tokens are marked used, never deleted**, so a sync between gonzalo stores
+  cannot bring a used token back.
+- **An account that is already linked is refused without using up the token**, so
+  a mistaken attempt doesn't waste it.
+- Minting, and every redemption attempt, succeeded or not, is audited.
+
+Linking writes identity records. Per
+[ADR 0008](./adr/0008-secrets-deployment-and-network-boundary.md), run it only
+against a gonzalod with authentication on; otherwise any pod could grant itself a
+role.
