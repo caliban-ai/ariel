@@ -13,3 +13,12 @@ path = "src/main.rs"
 [dependencies]
 ariel-core.workspace = true
 clap.workspace = true
+# `fs` lets the CLI act on a local gonzalo store with --store, instead of
+# gonzalod.
+gonzalo = { workspace = true, features = ["fs"] }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

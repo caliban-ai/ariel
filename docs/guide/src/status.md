@@ -78,7 +78,13 @@ the channel, the lower of the two winning
 - Prints the chat providers compiled into the build.
 - Serves `GET /healthz` and shuts down cleanly on Ctrl-C or SIGTERM.
 
-**`ariel`** (CLI): `--version` and `--help` only.
+**`ariel`** (CLI)
+
+- `ariel channel show` and `ariel channel set` manage a channel's configuration
+  record: what it follows, how much it hears and its command ceiling
+  ([The `ariel` CLI](./cli.md)). Changes are audited, and a concurrent edit is
+  reported as a conflict instead of overwriting what is stored.
+- Acts on gonzalod, or on a local gonzalo store with `--store`.
 
 **Build and release**
 
@@ -97,7 +103,6 @@ One thin thread through every seam, Discord only.
 |---|---|---|
 | [#16](https://github.com/caliban-ai/ariel/issues/16) | Account linking: `ariel link new` and `/ariel link` | gonzalod auth |
 | [#17](https://github.com/caliban-ai/ariel/issues/17) | Two-key command authorization and audit trail | gonzalod auth |
-| [#18](https://github.com/caliban-ai/ariel/issues/18) | `ariel` CLI for channel configuration | — |
 | [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | #16, #17 |
 | [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #20 |
 

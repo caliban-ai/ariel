@@ -11,6 +11,7 @@
 
 - [Getting Started](./getting-started.md)
 - [Configuration](./configuration.md)
+- [The `ariel` CLI](./cli.md)
 - [Discord Setup](./discord.md)
 
 # Architecture Decisions
