@@ -17,9 +17,11 @@ Ariel is designed as one bridge at four depths, each shippable on its own.
 | Approvals | both, narrow | Approve or deny a risky action with buttons | **Designed, deferred** (#6). Blocked on upstream caliban and prospero work. |
 | Conversational | both, full | A chat thread is an agent session | **Designed, deferred** (#7). |
 
-Commands are to be authorized on two keys: a person's role and a ceiling set on
-the channel, the lower of the two winning
-([ADR 0009](./adr/0009-channel-config.md)). That authorization is planned (#17).
+Commands are authorized on two keys: a person's role and a ceiling set on the
+channel, the lower of the two winning ([ADR 0009](./adr/0009-channel-config.md)).
+The authorization and its audit trail are built
+([ADR 0012](./adr/0012-command-authorization-and-audit.md)); no command uses them
+yet (#20).
 
 ## Built
 
@@ -106,8 +108,7 @@ One thin thread through every seam, Discord only.
 
 | Issue | Work | Blocked by |
 |---|---|---|
-| [#17](https://github.com/caliban-ai/ariel/issues/17) | Two-key command authorization and audit trail | gonzalod auth |
-| [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | #17 |
+| [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | — |
 | [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #20 |
 
 Not yet decided or built, and not scheduled: the Slack and Teams backends, core

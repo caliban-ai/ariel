@@ -17,9 +17,8 @@
 
 use std::time::Duration;
 
-use crate::chat::{
-    ArgSpec, Command, CommandSpec, Message, ProviderId, Role, Severity, UserRef, Visibility,
-};
+use crate::auth::authenticator;
+use crate::chat::{ArgSpec, Command, CommandSpec, Message, Role, Severity, UserRef, Visibility};
 use crate::records::gonzalo::{
     AuditEntry, AuditResult, Authenticator, BindingOrigin, FleetActor, FleetKeyError, FleetRole,
     GrantScope, IdentityBinding, LinkSecret, LinkToken, Person, RecordKey, RedeemError, RoleGrant,
@@ -297,16 +296,6 @@ async fn grant(
         }
     }
     Ok(())
-}
-
-/// The authenticator that vouches for accounts on this chat provider.
-fn authenticator(provider: &ProviderId) -> Authenticator {
-    match provider.as_str() {
-        "discord" => Authenticator::Discord,
-        "slack" => Authenticator::Slack,
-        "teams" => Authenticator::Teams,
-        other => Authenticator::Other(other.to_owned()),
-    }
 }
 
 /// A fresh person id within gonzalo's `[A-Za-z0-9_-]{1,64}`.

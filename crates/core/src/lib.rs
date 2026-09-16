@@ -4,6 +4,7 @@
 //! and gonzalo clients. It is always compiled and carries no chat platform SDK;
 //! each platform lives in its own feature-gated backend crate.
 
+pub mod auth;
 pub mod channels;
 pub mod chat;
 pub mod link;
