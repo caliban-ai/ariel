@@ -19,10 +19,11 @@ axum = "0.8"
 clap = { version = "4", features = ["derive", "env"] }
 futures-util = "0.3"
 getrandom = "0.3"
-# Access-control records (ADR 0003, gonzalo ADR 0022). Pinned to the commit that
-# added the fleet record kinds (caliban-ai/gonzalo#296) until a release carries
-# them: crates.io's gonzalo 0.6.0 cannot encode or decode them.
-gonzalo = { git = "https://github.com/caliban-ai/gonzalo", rev = "f537da7b785c15ec141835ed31910c5418426e83", default-features = false }
+# Access-control records (ADR 0003, gonzalo ADR 0022 and 0023). Pinned to a
+# commit until a release carries the fleet record kinds: crates.io's gonzalo
+# 0.6.0 cannot encode or decode them. This rev is caliban-ai/gonzalo#297, which
+# gave ChannelConfig the fields ADR 0009 specifies.
+gonzalo = { git = "https://github.com/caliban-ai/gonzalo", rev = "e1bf8c763d89132839aed6d12baefc405186c9f1", default-features = false }
 # Plain HTTP only for now: prosperod is unauthenticated and binds loopback by
 # default. TLS arrives with the deployment decision (#5).
 reqwest = { version = "0.13", default-features = false, features = ["stream"] }

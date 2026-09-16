@@ -115,6 +115,25 @@ The record is keyed by `provider`, `tenant` and `channel`. It belongs to no pers
 Who changed it is recorded in the audit trail and in gonzalo's author stamp, not in
 the record.
 
+### How gonzalo implemented it
+
+gonzalo adopted these fields in
+[ADR 0023](https://github.com/caliban-ai/gonzalo/blob/main/docs/adr/0023-channel-config-fields.md)
+(caliban-ai/gonzalo#297), keyed `fleet/channels/<provider>:<tenant>:<channel>`.
+Two details of the stored form differ from the table above, which described the
+logical fields rather than a serialization Ariel owns:
+
+- `follows` is stored inside gonzalo's atomic wrapper, as a one-element array:
+  `"follows":[{"kind":"workspaces","names":["caliban"]}]`. That wrapper is what
+  makes two concurrent follow edits conflict instead of merging field by field,
+  which would otherwise pair one writer's `kind` with another's `names`.
+- `ceiling` serializes capitalized (`"Viewer"`), because `FleetRole` is shared
+  with role grants and link tokens. Ariel reads it as a typed value, so the
+  spelling does not reach Ariel's own behaviour.
+
+gonzalo also enforces the non-empty rule on decode, so a hand-written record
+following an empty set of workspaces is rejected, not silently accepted.
+
 ## Consequences
 
 - **Positive:** Both required examples are one record each. No channel receives

@@ -639,7 +639,7 @@ dependencies = [
 [[package]]
 name = "gonzalo"
 version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=f537da7b785c15ec141835ed31910c5418426e83#f537da7b785c15ec141835ed31910c5418426e83"
+source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
 dependencies = [
  "gonzalo-core",
  "gonzalo-domain",
@@ -650,7 +650,7 @@ dependencies = [
 [[package]]
 name = "gonzalo-core"
 version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=f537da7b785c15ec141835ed31910c5418426e83#f537da7b785c15ec141835ed31910c5418426e83"
+source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -662,7 +662,7 @@ dependencies = [
 [[package]]
 name = "gonzalo-domain"
 version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=f537da7b785c15ec141835ed31910c5418426e83#f537da7b785c15ec141835ed31910c5418426e83"
+source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
 dependencies = [
  "gonzalo-core",
  "serde",
@@ -672,7 +672,7 @@ dependencies = [
 [[package]]
 name = "gonzalo-proto"
 version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=f537da7b785c15ec141835ed31910c5418426e83#f537da7b785c15ec141835ed31910c5418426e83"
+source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
 dependencies = [
  "gonzalo-core",
  "prost",
@@ -685,7 +685,7 @@ dependencies = [
 [[package]]
 name = "gonzalo-store-fs"
 version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=f537da7b785c15ec141835ed31910c5418426e83#f537da7b785c15ec141835ed31910c5418426e83"
+source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
 dependencies = [
  "async-trait",
  "gonzalo-core",
@@ -697,7 +697,7 @@ dependencies = [
 [[package]]
 name = "gonzalo-store-server"
 version = "0.6.0"
-source = "git+https://github.com/caliban-ai/gonzalo?rev=f537da7b785c15ec141835ed31910c5418426e83#f537da7b785c15ec141835ed31910c5418426e83"
+source = "git+https://github.com/caliban-ai/gonzalo?rev=e1bf8c763d89132839aed6d12baefc405186c9f1#e1bf8c763d89132839aed6d12baefc405186c9f1"
 dependencies = [
  "async-trait",
  "gonzalo-core",

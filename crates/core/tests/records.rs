@@ -1,13 +1,12 @@
 //! The gonzalo client for access-control records (#15), against `FsStore` in a
 //! temporary directory.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ariel_core::records::gonzalo::{
     AuditEntry, AuditResult, Authenticator, BindingOrigin, ChannelConfig, FleetActor, FleetRole,
-    FsStore, GrantScope, Identity, IdentityBinding, LinkSecret, LinkToken, Person, RecordKey,
-    RoleGrant, VerifiedEmail,
+    Follows, FsStore, GrantScope, Identity, IdentityBinding, LinkSecret, LinkToken, NotifyPreset,
+    Person, RecordKey, RoleGrant, VerifiedEmail,
 };
 use ariel_core::records::{Delete, FleetRecord, Records, RecordsError, Write};
 use tempfile::TempDir;
@@ -45,7 +44,7 @@ fn binding() -> IdentityBinding {
 fn grant() -> RoleGrant {
     RoleGrant {
         person: "p1".into(),
-        scope: GrantScope::Repo("caliban-ai/caliban".into()),
+        scope: GrantScope::Workspace("caliban".into()),
         role: FleetRole::Operator,
         granted_by: FleetActor::Person("p0".into()),
         granted_at: NOW,
@@ -55,10 +54,11 @@ fn grant() -> RoleGrant {
 fn channel() -> ChannelConfig {
     ChannelConfig {
         provider: "discord".into(),
-        channel_id: "5678".into(),
+        tenant: "guild-1".into(),
+        channel: "5678".into(),
+        follows: Follows::workspaces(["caliban"]).unwrap(),
+        notify: NotifyPreset::Failures,
         ceiling: FleetRole::Viewer,
-        repos: vec!["caliban-ai/caliban".into()],
-        filters: BTreeMap::from([("notify".into(), serde_json::json!("all"))]),
     }
 }
 
@@ -284,4 +284,20 @@ fn connect_rejects_a_malformed_url() {
 #[test]
 fn connect_accepts_a_gonzalod_url_without_contacting_it() {
     Records::connect("http://127.0.0.1:1", "token", Identity::new("arield")).unwrap();
+}
+
+#[tokio::test]
+async fn a_channel_following_the_whole_fleet_round_trips() {
+    let (_dir, records) = records();
+    let fleet_wide = ChannelConfig {
+        follows: Follows::Fleet,
+        notify: NotifyPreset::All,
+        ..channel()
+    };
+    round_trip(&records, fleet_wide.key().unwrap(), fleet_wide).await;
+}
+
+#[test]
+fn a_channel_must_follow_at_least_one_workspace() {
+    assert!(Follows::workspaces(Vec::<String>::new()).is_err());
 }
