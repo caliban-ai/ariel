@@ -4,13 +4,14 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use futures_util::{Stream, StreamExt, stream};
-use reqwest::header::{ACCEPT, CONTENT_TYPE};
+use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client, RequestBuilder, Response, StatusCode, Url};
 use serde::de::DeserializeOwned;
 
 use super::sse::{FrameDecoder, StreamItem};
 use super::types::{
-    ApiErrorBody, FleetSnapshot, InputRequest, RespawnedResponse, SpawnRequest, SpawnedResponse,
+    ApiErrorBody, FleetSnapshot, InputRequest, RespawnedResponse, SessionInfo, SpawnRequest,
+    SpawnedResponse,
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -24,6 +25,11 @@ pub enum ClientError {
     BaseUrl { url: String, reason: String },
     #[error("request to prospero failed: {0}")]
     Transport(#[from] reqwest::Error),
+    /// prosperod refused the request's credentials: `401` for a missing or
+    /// unknown token, `403` for a token whose scope is too low (prospero
+    /// ADR 0010). Retrying will not help until the token is fixed.
+    #[error("prosperod refused Ariel's credentials ({status}): {message}")]
+    Auth { status: StatusCode, message: String },
     /// prosperod answered with a non-success status. `kind` is prospero's
     /// error kind (`not_found`, `invalid_state`, ...) when the body carried one.
     #[error("prospero returned {status}: {message}")]
@@ -38,11 +44,24 @@ pub enum ClientError {
 
 /// A client for one prosperod.
 ///
-/// Speaks plain HTTP; TLS arrives with the deployment decision (#5).
+/// Speaks plain HTTP; TLS arrives with the deployment decision (#5). With a
+/// token (#46), every request carries it as `Authorization: Bearer`, including
+/// the event stream.
 #[derive(Debug, Clone)]
 pub struct ProsperoClient {
     base: Url,
     http: Client,
+    token: Option<BearerToken>,
+}
+
+/// A prosperod API token. Formats as `[redacted]`, so it cannot reach logs.
+#[derive(Clone)]
+struct BearerToken(String);
+
+impl std::fmt::Debug for BearerToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[redacted]")
+    }
 }
 
 impl ProsperoClient {
@@ -58,7 +77,28 @@ impl ProsperoClient {
             return Err(invalid("not a hierarchical URL".to_owned()));
         }
         let http = Client::builder().connect_timeout(CONNECT_TIMEOUT).build()?;
-        Ok(Self { base: url, http })
+        Ok(Self {
+            base: url,
+            http,
+            token: None,
+        })
+    }
+
+    /// This client, sending `token` with every request.
+    #[must_use]
+    pub fn with_token(mut self, token: impl Into<String>) -> Self {
+        self.token = Some(BearerToken(token.into()));
+        self
+    }
+
+    /// `GET /api/session`: who prosperod takes this client to be, or that it
+    /// runs with authentication off.
+    pub async fn session(&self) -> Result<SessionInfo, ClientError> {
+        json(
+            self.send(self.http.get(self.endpoint(&["api", "session"])))
+                .await?,
+        )
+        .await
     }
 
     /// `GET /api/fleet`.
@@ -124,8 +164,7 @@ impl ProsperoClient {
         let mut url = self.endpoint(&["api", "agents", agent_id, "stream"]);
         url.query_pairs_mut().append_pair("from", &from.to_string());
         let response = check(
-            self.http
-                .get(url)
+            self.authorize(self.http.get(url))
                 .header(ACCEPT, "text/event-stream")
                 .send()
                 .await?,
@@ -172,7 +211,21 @@ impl ProsperoClient {
     }
 
     async fn send(&self, request: RequestBuilder) -> Result<Response, ClientError> {
-        check(request.timeout(REQUEST_TIMEOUT).send().await?).await
+        check(
+            self.authorize(request)
+                .timeout(REQUEST_TIMEOUT)
+                .send()
+                .await?,
+        )
+        .await
+    }
+
+    /// `request` with the bearer token, when this client has one.
+    fn authorize(&self, request: RequestBuilder) -> RequestBuilder {
+        match &self.token {
+            Some(BearerToken(token)) => request.header(AUTHORIZATION, format!("Bearer {token}")),
+            None => request,
+        }
     }
 
     /// The base URL extended by percent-encoded path segments.
@@ -202,6 +255,9 @@ async fn check(response: Response) -> Result<Response, ClientError> {
         Ok(body) => (Some(body.kind), body.error),
         Err(_) => (None, text),
     };
+    if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        return Err(ClientError::Auth { status, message });
+    }
     Err(ClientError::Api {
         status,
         kind,

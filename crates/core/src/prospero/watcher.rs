@@ -82,6 +82,16 @@ async fn run(client: ProsperoClient, config: WatchConfig, tx: mpsc::Sender<Fleet
         }
         let fleet = match client.fleet().await {
             Ok(fleet) => fleet,
+            // Retrying cannot fix a refused credential, so say so plainly
+            // rather than as one more transient poll failure.
+            Err(error @ ClientError::Auth { .. }) => {
+                tracing::error!(
+                    %error,
+                    "prosperod refused Ariel's token; set ARIEL_PROSPERO_TOKEN_FILE to a token \
+                     with at least `read` scope"
+                );
+                continue;
+            }
             Err(error) => {
                 tracing::warn!(%error, "prospero fleet poll failed");
                 continue;

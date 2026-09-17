@@ -1,4 +1,4 @@
-data: {"seq":1,"ts":"2026-06-18T00:00:00+00:00","repo":"caliban","agent_id":"a1","kind":{"kind":"agent_spawned"}}
+data: {"seq":1,"ts":"2026-06-18T00:00:00+00:00","repo":"caliban","agent_id":"a1","kind":{"kind":"agent_spawned"},"actor":"ariel"}
 
 :
 

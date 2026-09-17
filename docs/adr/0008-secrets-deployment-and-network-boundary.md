@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-13
+- **Revisited by:** [ADR 0013](0013-ariel-authenticates-to-prosperod.md), after prosperod gained API authentication
 - **Source:** `docs/superpowers/specs/2026-07-03-ariel-chat-bridge-design.md` (caliban-ai umbrella workspace) §IdP federation, open question 5; issue #5
 
 ## Context

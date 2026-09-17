@@ -14,6 +14,7 @@ fn event(ts: &str, kind: EventKind) -> FleetEvent {
         repo: "caliban".to_owned(),
         agent_id: "a1".to_owned(),
         kind,
+        actor: None,
     }
 }
 

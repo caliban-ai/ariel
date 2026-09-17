@@ -18,6 +18,7 @@ const PROSPERO_URL: &str = "ARIEL_PROSPERO_URL";
 const GONZALO_URL: &str = "ARIEL_GONZALO_URL";
 const DASHBOARD_URL: &str = "ARIEL_DASHBOARD_URL";
 const GONZALO_TOKEN_FILE: &str = "ARIEL_GONZALO_TOKEN_FILE";
+const PROSPERO_TOKEN_FILE: &str = "ARIEL_PROSPERO_TOKEN_FILE";
 const HEALTH_ADDR: &str = "ARIEL_HEALTH_ADDR";
 
 /// A credential read from a mounted Secret file. It formats as `[redacted]`,
@@ -70,6 +71,10 @@ pub enum ConfigError {
 pub struct Config {
     pub discord_token: Option<Secret>,
     pub gonzalo_token: Option<Secret>,
+    /// Ariel's API token for prosperod, needed once prosperod runs with API
+    /// authentication on (prospero ADR 0010). It needs the `operate` scope to
+    /// spawn and kill agents; `read` is enough for notifications alone.
+    pub prospero_token: Option<Secret>,
     /// Where `/healthz` is served. Defaults to `0.0.0.0:8081`.
     pub health_addr: SocketAddr,
     /// prosperod's base URL. Without it the daemon serves health only and
@@ -95,6 +100,7 @@ impl Config {
         };
         let discord_token = secret(DISCORD_TOKEN_FILE)?;
         let gonzalo_token = secret(GONZALO_TOKEN_FILE)?;
+        let prospero_token = secret(PROSPERO_TOKEN_FILE)?;
 
         let health_addr = match lookup(HEALTH_ADDR) {
             None => SocketAddr::from(([0, 0, 0, 0], 8081)),
@@ -126,6 +132,7 @@ impl Config {
         Ok(Self {
             discord_token,
             gonzalo_token,
+            prospero_token,
             health_addr,
             prospero_url: lookup(PROSPERO_URL),
             gonzalo_url: lookup(GONZALO_URL),

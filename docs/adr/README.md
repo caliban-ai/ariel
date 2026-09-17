@@ -37,6 +37,7 @@ changes gets a *new* ADR that supersedes the old one, and the old one is marked
 | [0010](0010-discord-library-twilight.md) | Discord backend on twilight | accepted |
 | [0011](0011-no-replay-after-a-restart.md) | A restarted daemon does not replay what it missed | accepted |
 | [0012](0012-command-authorization-and-audit.md) | Command authorization: grant scope, what is mutating, and when it is audited | accepted |
+| [0013](0013-ariel-authenticates-to-prosperod.md) | Ariel authenticates to prosperod with a scoped API token | accepted |
 
 ## Adding a new ADR
 
