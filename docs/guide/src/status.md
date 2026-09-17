@@ -1,8 +1,10 @@
 # Status & Roadmap
 
-Ariel is pre-release: workspace version `0.1.0`, no tagged release, and no
-published container image yet. This page lists what the code does today, what is
-next, and what is blocked. Work is tracked on the
+Ariel is pre-1.0. The current release is **v0.1.0**, published as
+`ghcr.io/caliban-ai/ariel:0.1.0` for `linux/amd64` and `linux/arm64`; see the
+[changelog](https://github.com/caliban-ai/ariel/blob/main/CHANGELOG.md). This page
+lists what the code does today, what is next, and what is blocked. Work is tracked
+on the
 [caliban-ai board](https://github.com/orgs/caliban-ai/projects/1) under the MVP
 epic, [caliban-ai/ariel#22](https://github.com/caliban-ai/ariel/issues/22).
 
@@ -111,9 +113,9 @@ One thin thread through every seam, Discord only.
 | [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | — |
 | [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #20 |
 
-Not yet decided or built, and not scheduled: the Slack and Teams backends, core
-message fallbacks (truncation, dropping actions when a platform has no buttons),
-and a published release.
+Not yet decided or built, and not scheduled: the Slack and Teams backends, and
+core message fallbacks (truncation, dropping actions when a platform has no
+buttons).
 
 ## Blocked upstream
 
