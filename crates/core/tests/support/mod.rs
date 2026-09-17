@@ -116,6 +116,7 @@ fn event(workspace: &str, agent: &str, kind: EventKind) -> FleetEvent {
         repo: workspace.to_owned(),
         agent_id: agent.to_owned(),
         kind,
+        actor: None,
     }
 }
 

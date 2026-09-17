@@ -223,3 +223,38 @@ fn a_dashboard_that_is_not_a_url_is_an_error_naming_the_variable() {
     assert!(matches!(error, ConfigError::DashboardUrl { .. }), "{error}");
     assert!(error.to_string().contains("ARIEL_DASHBOARD_URL"), "{error}");
 }
+
+#[test]
+fn the_prospero_token_is_read_from_its_file_and_redacted() {
+    let prospero = temp_file("prospero", "pspo_abc123-do-not-print\n");
+    let config = Config::from_lookup(lookup(&[(
+        "ARIEL_PROSPERO_TOKEN_FILE",
+        prospero.to_str().unwrap(),
+    )]))
+    .unwrap();
+
+    assert_eq!(
+        config.prospero_token.as_ref().map(Secret::expose),
+        Some("pspo_abc123-do-not-print")
+    );
+    assert!(!format!("{config:?}").contains("pspo_abc123"));
+}
+
+#[test]
+fn an_unset_prospero_token_means_no_token() {
+    let config = Config::from_lookup(lookup(&[])).unwrap();
+    assert!(config.prospero_token.is_none());
+}
+
+#[test]
+fn an_unreadable_prospero_token_file_is_an_error_naming_the_variable() {
+    let error = Config::from_lookup(lookup(&[(
+        "ARIEL_PROSPERO_TOKEN_FILE",
+        "/nonexistent/ariel/prospero-token",
+    )]))
+    .expect_err("a missing token file stops startup");
+    assert!(
+        error.to_string().contains("ARIEL_PROSPERO_TOKEN_FILE"),
+        "{error}"
+    );
+}

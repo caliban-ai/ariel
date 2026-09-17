@@ -19,7 +19,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ariel_core::chat::{ChatProvider, Inbound, Message, ProviderId, Visibility};
 use ariel_core::link;
 use ariel_core::notify::{Notifier, NotifyConfig, Route};
-use ariel_core::prospero::{FleetWatcher, ProsperoClient, WatchConfig};
+use ariel_core::prospero::types::SessionInfo;
+use ariel_core::prospero::{ClientError, FleetWatcher, ProsperoClient, WatchConfig};
 use ariel_core::records::gonzalo::ChannelConfig;
 use ariel_core::records::{Records, RecordsError};
 use futures_util::StreamExt;
@@ -104,6 +105,7 @@ pub async fn run(
     }
     let commands = tokio::spawn(dispatch(provider.clone(), records.clone()));
 
+    report_prospero_identity(&prospero).await;
     let (mut events, watcher) = FleetWatcher::new(prospero, watch).spawn(FLEET_BUFFER);
     let mut shutdown = std::pin::pin!(shutdown);
     loop {
@@ -128,6 +130,29 @@ pub async fn run(
     watcher.abort();
     commands.abort();
     Ok(())
+}
+
+/// Log who prosperod takes Ariel to be, so a missing or under-scoped token is
+/// obvious at startup rather than as a stream of failed polls. Never fatal:
+/// prosperod may simply not be up yet.
+async fn report_prospero_identity(prospero: &ProsperoClient) {
+    match prospero.session().await {
+        Ok(SessionInfo::Token {
+            token_name, scope, ..
+        }) => tracing::info!(%token_name, ?scope, "authenticated to prosperod"),
+        Ok(SessionInfo::Disabled) => {
+            tracing::info!("prosperod runs with API authentication off");
+        }
+        Err(error @ ClientError::Auth { .. }) => tracing::error!(
+            %error,
+            "prosperod refused Ariel's token; set ARIEL_PROSPERO_TOKEN_FILE to a valid token"
+        ),
+        // prosperod before v0.8 has no /api/session.
+        Err(ClientError::Api { status, .. }) if status.as_u16() == 404 => {
+            tracing::debug!("prosperod predates API authentication");
+        }
+        Err(error) => tracing::warn!(%error, "could not ask prosperod who Ariel is"),
+    }
 }
 
 /// Answer commands as they arrive, each on its own task so a slow one never

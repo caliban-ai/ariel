@@ -1,13 +1,15 @@
 //! Golden tests pinning Ariel's mirrored prospero wire types.
 //!
-//! The fixtures under `fixtures/prospero/` are written from prospero v0.7.0's
-//! wire contract (`crates/types/src/{model,event,api}.rs`, `crates/api/src/sse.rs`).
+//! The fixtures under `fixtures/prospero/` are written from prospero v0.8.1's
+//! wire contract (`crates/types/src/{model,event,api,auth}.rs`, `crates/api/src/sse/`).
+//! v0.8 added only the optional `actor` on the event envelope and the
+//! `/api/session` route; every other shape is unchanged from v0.7.0.
 //! If prospero changes its wire format, these fail before Ariel misreads it.
 
 use ariel_core::prospero::sse::{FrameDecoder, StreamItem};
 use ariel_core::prospero::types::{
-    AgentStatus, EventKind, FleetEvent, FleetSnapshot, GapSignal, OutputStream, SpawnRequest,
-    SpawnedResponse, WorkspaceHealth,
+    AgentStatus, EventKind, FleetEvent, FleetSnapshot, GapSignal, OutputStream, Scope, SessionInfo,
+    SpawnRequest, SpawnedResponse, WorkspaceHealth,
 };
 use serde_json::{Value, json};
 
@@ -186,4 +188,54 @@ fn recorded_stream_decodes_in_awkward_chunks() {
         })
     );
     assert!(matches!(&items[3], StreamItem::Event(e) if e.kind.is_terminal_status()));
+    assert!(
+        matches!(&items[0], StreamItem::Event(e) if e.actor.as_deref() == Some("ariel")),
+        "the recorded stream carries v0.8's actor"
+    );
+}
+
+#[test]
+fn an_event_names_the_token_that_caused_it_when_prospero_knows() {
+    let events: Vec<FleetEvent> = serde_json::from_str(EVENTS).unwrap();
+
+    // prospero v0.8 attributes an API spawn and removal to the token that made
+    // them; every other event carries no actor.
+    assert_eq!(events[0].actor.as_deref(), Some("ariel"));
+    assert_eq!(events[11].actor.as_deref(), Some("ariel"));
+    assert!(
+        events[1..11].iter().all(|event| event.actor.is_none()),
+        "only the spawn and removal are attributed"
+    );
+}
+
+#[test]
+fn an_event_without_an_actor_serializes_without_one() {
+    let event: FleetEvent = serde_json::from_value(json!({
+        "seq": 3, "ts": "t", "repo": "caliban", "agent_id": "a1",
+        "kind": { "kind": "agent_spawned" }
+    }))
+    .unwrap();
+    assert!(event.actor.is_none(), "a v0.7 daemon's events still decode");
+    assert!(
+        serde_json::to_value(&event).unwrap().get("actor").is_none(),
+        "absent on the wire, as prospero writes it"
+    );
+}
+
+#[test]
+fn session_info_decodes_both_shapes() {
+    let disabled: SessionInfo = serde_json::from_value(json!({"auth": "disabled"})).unwrap();
+    assert_eq!(disabled, SessionInfo::Disabled);
+
+    let token: SessionInfo =
+        serde_json::from_value(json!({"auth": "token", "token_name": "ariel", "scope": "operate"}))
+            .unwrap();
+    assert_eq!(
+        token,
+        SessionInfo::Token {
+            token_name: "ariel".into(),
+            scope: Scope::Operate,
+            expires_at: None,
+        }
+    );
 }

@@ -118,8 +118,11 @@ fn wiring(config: &Config) -> Result<Option<Wiring>, WiringError> {
         return Ok(None);
     };
 
-    let prospero = ProsperoClient::new(prospero_url)
+    let mut prospero = ProsperoClient::new(prospero_url)
         .map_err(|error| WiringError::Prospero(error.to_string()))?;
+    if let Some(token) = &config.prospero_token {
+        prospero = prospero.with_token(token.expose());
+    }
     let token = config.gonzalo_token.as_ref().map_or("", Secret::expose);
     let records = Records::connect(gonzalo_url, token, Identity::new("arield"))
         .map_err(|error| WiringError::Gonzalo(error.to_string()))?;

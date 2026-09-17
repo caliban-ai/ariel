@@ -100,6 +100,11 @@ pub struct FleetEvent {
     /// Empty for workspace-level events.
     pub agent_id: String,
     pub kind: EventKind,
+    /// The API token that caused this event, when a request did so directly: an
+    /// API spawn or removal on a local fleet (prospero v0.8). `None` for events
+    /// prosperod observed itself, and from daemons older than v0.8.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
 }
 
 /// What happened. Tagged on the wire by an inner `kind` field.
@@ -242,4 +247,33 @@ pub struct InputRequest {
 pub struct ApiErrorBody {
     pub error: String,
     pub kind: String,
+}
+
+/// What an API token may do (prospero ADR 0010). Each scope includes the ones
+/// below it: `read` covers every GET and the event stream, `operate` adds spawn,
+/// kill, respawn and input, and `admin` adds workspace changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    Read,
+    Operate,
+    Admin,
+    /// A scope this build of Ariel does not know.
+    #[serde(other)]
+    Unknown,
+}
+
+/// `GET /api/session`: who prosperod takes the caller to be.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "auth", rename_all = "snake_case")]
+pub enum SessionInfo {
+    /// prosperod runs with API authentication off.
+    Disabled,
+    Token {
+        token_name: String,
+        scope: Scope,
+        /// A cookie session's expiry; `None` for a bearer token.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expires_at: Option<String>,
+    },
 }

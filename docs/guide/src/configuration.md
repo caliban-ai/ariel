@@ -10,6 +10,7 @@ configuration file and no command-line options beyond `--help` and `--version`.
 | `ARIEL_HEALTH_ADDR` | `0.0.0.0:8081` | Socket address `/healthz` is served on. A value that is not a socket address (for example a bare port) stops `arield` at startup. |
 | `ARIEL_DISCORD_TOKEN_FILE` | unset | Path to a file holding the Discord bot token. |
 | `ARIEL_GONZALO_TOKEN_FILE` | unset | Path to a file holding `arield`'s bearer token for gonzalod. |
+| `ARIEL_PROSPERO_TOKEN_FILE` | unset | Path to a file holding `arield`'s API token for prosperod. Required once prosperod runs with API authentication on (prospero v0.8+); use a token with `operate` scope ([ADR 0013](./adr/0013-ariel-authenticates-to-prosperod.md)). Without it, requests carry no token. |
 | `ARIEL_PROSPERO_URL` | unset | prosperod's base URL, for example `http://prosperod:8080`. |
 | `ARIEL_GONZALO_URL` | unset | gonzalod's base URL, where the channel and access-control records live. |
 | `ARIEL_DASHBOARD_URL` | unset | Linked from every notification. A value that is not a URL stops `arield` at startup. |
