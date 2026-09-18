@@ -38,11 +38,23 @@ fn token_file(test: &str) -> PathBuf {
     path
 }
 
+/// `arield` with nothing from the test's environment, so a developer's own
+/// `RUST_LOG` or `ARIEL_*` settings cannot change the outcome. The coverage
+/// profile path is kept, so a coverage run neither loses the child's profile
+/// nor leaves a default-named one in the working directory.
+fn arield() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_arield"));
+    command.env_clear();
+    if let Some(profile) = std::env::var_os("LLVM_PROFILE_FILE") {
+        command.env("LLVM_PROFILE_FILE", profile);
+    }
+    command
+}
+
 /// `arield` with only prosperod configured, and `extra` on top.
 fn spawn_arield(prospero: &str, token: &PathBuf, extra: &[(&str, &str)]) -> Child {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_arield"));
+    let mut command = arield();
     command
-        .env_clear()
         .env("ARIEL_PROSPERO_URL", prospero)
         .env("ARIEL_PROSPERO_TOKEN_FILE", token)
         .env("ARIEL_HEALTH_ADDR", "127.0.0.1:0")
@@ -142,8 +154,7 @@ async fn json_format_writes_parseable_lines() {
 
 #[test]
 fn an_unknown_log_format_stops_arield_naming_the_variable() {
-    let out = Command::new(env!("CARGO_BIN_EXE_arield"))
-        .env_clear()
+    let out = arield()
         .env("ARIEL_LOG_FORMAT", "yaml")
         .output()
         .expect("run arield");

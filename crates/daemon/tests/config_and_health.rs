@@ -149,6 +149,8 @@ fn arield_exits_non_zero_on_a_bad_token_file_without_printing_tokens() {
 
     let out = Command::new(env!("CARGO_BIN_EXE_arield"))
         .env_clear()
+        // Keep a coverage run's profile path, or the child writes a stray one.
+        .envs(std::env::var_os("LLVM_PROFILE_FILE").map(|path| ("LLVM_PROFILE_FILE", path)))
         .env("ARIEL_DISCORD_TOKEN_FILE", &discord)
         .env("ARIEL_GONZALO_TOKEN_FILE", &missing)
         .env("ARIEL_HEALTH_ADDR", "127.0.0.1:0")
