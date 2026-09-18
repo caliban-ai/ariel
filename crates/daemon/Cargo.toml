@@ -31,6 +31,7 @@ futures-util.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "signal"] }
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 # The wiring test runs the bridge against a stub prosperod, channel records in

@@ -14,6 +14,8 @@ configuration file and no command-line options beyond `--help` and `--version`.
 | `ARIEL_PROSPERO_URL` | unset | prosperod's base URL, for example `http://prosperod:8080`. |
 | `ARIEL_GONZALO_URL` | unset | gonzalod's base URL, where the channel and access-control records live. |
 | `ARIEL_DASHBOARD_URL` | unset | Linked from every notification. A value that is not a URL stops `arield` at startup. |
+| `RUST_LOG` | `warn,arield=info,ariel_daemon=info,ariel_core=info,ariel_discord=info` | Which log lines `arield` writes to stderr, as [`tracing` filter directives](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html). The default shows Ariel's own `info` lines and only warnings from its dependencies. A filter that does not parse stops `arield` at startup. |
+| `ARIEL_LOG_FORMAT` | `text` | `text` for one human-readable line per event, or `json` for one JSON object per line, for log shipping. Any other value stops `arield` at startup. |
 | `ARIEL_DISCORD_GUILD_ID` | unset | The guild `/ariel` is registered in. Numeric; anything else stops `arield` at startup. |
 | `ARIEL_DISCORD_APPLICATION_ID` | unset | The Discord application answering interactions. Numeric. |
 

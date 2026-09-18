@@ -10,6 +10,15 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+### Fixed
+
+- `arield` now writes its log to stderr, so it shows up in `kubectl logs`. Before
+  this, every warning and error was silently dropped, including prosperod
+  refusing Ariel's token and the chat platform rate-limiting it (#49).
+  `RUST_LOG` sets the level and `ARIEL_LOG_FORMAT=json` switches to JSON lines.
+- `arield` checks its prosperod token at startup whenever `ARIEL_PROSPERO_URL`
+  is set, even if gonzalod or the chat provider is not configured yet (#49).
+
 ## [0.1.0] - 2026-09-17
 
 The first release: Ariel notifies chat about the fleet, and knows who is allowed
