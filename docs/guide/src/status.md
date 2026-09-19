@@ -102,17 +102,21 @@ and `/ariel spawn` go through them.
 - CI: `cargo fmt --check`, clippy with `-D warnings`, build, test, a
   `--no-default-features` build of `ariel-daemon`, a check that `ariel-core` pulls
   in no chat SDK, and an 85% line-coverage floor (`scripts/coverage.sh`).
+- A headless end-to-end smoke test (`crates/e2e`), run in its own CI job: the
+  bridge against prosperod's and gonzalod's own server code, both with token
+  authentication on, and prospero's fake caliban standing in for agents. A
+  person links, spawns an agent from chat, sees its notification through to
+  the finish, and asks for the fleet status; the audit trail is checked in
+  gonzalo. No network beyond loopback and no model API keys.
 - `Dockerfile` and a release workflow that builds `ghcr.io/caliban-ai/ariel` for
   `linux/amd64` and `linux/arm64`, validating on pull requests and pushing on `v*`
   tags.
 
-## Next: the MVP walking skeleton
+## Next
 
-One thin thread through every seam, Discord only.
-
-| Issue | Work | Blocked by |
-|---|---|---|
-| [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | — |
+The MVP walking skeleton
+([#22](https://github.com/caliban-ai/ariel/issues/22)) is built; what remains
+is confirming `/ariel status` and `/ariel spawn` in a real guild.
 
 Not yet decided or built, and not scheduled: the Slack and Teams backends, and
 core message fallbacks (truncation, dropping actions when a platform has no
