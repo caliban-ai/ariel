@@ -105,7 +105,6 @@ pub async fn run(
     }
     let commands = tokio::spawn(dispatch(provider.clone(), records.clone()));
 
-    report_prospero_identity(&prospero).await;
     let (mut events, watcher) = FleetWatcher::new(prospero, watch).spawn(FLEET_BUFFER);
     let mut shutdown = std::pin::pin!(shutdown);
     loop {
@@ -135,7 +134,7 @@ pub async fn run(
 /// Log who prosperod takes Ariel to be, so a missing or under-scoped token is
 /// obvious at startup rather than as a stream of failed polls. Never fatal:
 /// prosperod may simply not be up yet.
-async fn report_prospero_identity(prospero: &ProsperoClient) {
+pub async fn report_prospero_identity(prospero: &ProsperoClient) {
     match prospero.session().await {
         Ok(SessionInfo::Token {
             token_name, scope, ..

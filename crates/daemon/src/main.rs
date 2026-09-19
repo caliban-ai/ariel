@@ -15,6 +15,7 @@ use ariel_core::records::gonzalo::Identity;
 use ariel_daemon::bridge::{self, Wiring};
 use ariel_daemon::config::{Config, Secret};
 use ariel_daemon::health;
+use ariel_daemon::logging::Logging;
 use clap::Parser;
 use tokio::net::TcpListener;
 
@@ -36,30 +37,55 @@ fn compiled_providers() -> &'static [&'static str] {
 async fn main() -> ExitCode {
     let _args = Args::parse();
 
+    // Logging comes first so every later failure is visible (#49). Until it is
+    // installed, stderr is the only place to say what went wrong.
+    if let Err(error) =
+        Logging::from_lookup(|name| std::env::var(name).ok()).and_then(Logging::install)
+    {
+        eprintln!("arield: {error}");
+        return ExitCode::FAILURE;
+    }
+
     let config = match Config::from_lookup(|name| std::env::var(name).ok()) {
         Ok(config) => config,
         Err(error) => {
-            eprintln!("arield: {error}");
+            tracing::error!(%error, "invalid configuration");
             return ExitCode::FAILURE;
         }
     };
-    println!("compiled providers: [{}]", compiled_providers().join(", "));
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        providers = ?compiled_providers(),
+        "arield starting"
+    );
 
     let listener = match TcpListener::bind(config.health_addr).await {
         Ok(listener) => listener,
         Err(error) => {
-            eprintln!(
-                "arield: cannot serve health checks on {}: {error}",
-                config.health_addr
-            );
+            tracing::error!(addr = %config.health_addr, %error, "cannot serve health checks");
             return ExitCode::FAILURE;
         }
     };
+    tracing::info!(addr = %config.health_addr, "serving health checks");
 
-    let wiring = match wiring(&config) {
+    let prospero = match prospero(&config) {
+        Ok(prospero) => prospero,
+        Err(error) => {
+            tracing::error!(%error, "cannot build the bridge");
+            return ExitCode::FAILURE;
+        }
+    };
+    // Checked as soon as there is a prosperod to ask, so a bad token shows up
+    // at startup whatever else is configured. In the background, so a slow
+    // prosperod never holds up the health endpoint.
+    if let Some(prospero) = prospero.clone() {
+        tokio::spawn(async move { bridge::report_prospero_identity(&prospero).await });
+    }
+
+    let wiring = match wiring(&config, prospero) {
         Ok(wiring) => wiring,
         Err(error) => {
-            eprintln!("arield: {error}");
+            tracing::error!(%error, "cannot build the bridge");
             return ExitCode::FAILURE;
         }
     };
@@ -71,7 +97,7 @@ async fn main() -> ExitCode {
             None => std::future::pending::<()>().await,
             Some(wiring) => {
                 if let Err(error) = bridge::run(wiring, shutdown_signal()).await {
-                    eprintln!("arield: {error}");
+                    tracing::error!(%error, "the bridge stopped");
                 }
             }
         }
@@ -80,12 +106,12 @@ async fn main() -> ExitCode {
     tokio::select! {
         result = health::serve(listener) => {
             if let Err(error) = result {
-                eprintln!("arield: health endpoint stopped: {error}");
+                tracing::error!(%error, "health endpoint stopped");
                 return ExitCode::FAILURE;
             }
         }
         () = bridge => {}
-        () = shutdown_signal() => {}
+        () = shutdown_signal() => tracing::info!("shutting down"),
     }
     ExitCode::SUCCESS
 }
@@ -103,26 +129,37 @@ enum WiringError {
     Provider(String),
 }
 
+/// A prosperod client when `ARIEL_PROSPERO_URL` is set, carrying Ariel's token
+/// when there is one.
+fn prospero(config: &Config) -> Result<Option<ProsperoClient>, WiringError> {
+    let Some(url) = &config.prospero_url else {
+        return Ok(None);
+    };
+    let mut prospero =
+        ProsperoClient::new(url).map_err(|error| WiringError::Prospero(error.to_string()))?;
+    if let Some(token) = &config.prospero_token {
+        prospero = prospero.with_token(token.expose());
+    }
+    Ok(Some(prospero))
+}
+
 /// The bridge this configuration describes, or `None` when it names no fleet to
 /// watch, no records to read, or no chat provider to notify.
-fn wiring(config: &Config) -> Result<Option<Wiring>, WiringError> {
-    let (Some(prospero_url), Some(gonzalo_url)) = (&config.prospero_url, &config.gonzalo_url)
-    else {
-        eprintln!(
-            "arield: ARIEL_PROSPERO_URL and ARIEL_GONZALO_URL are unset; serving health only"
+fn wiring(
+    config: &Config,
+    prospero: Option<ProsperoClient>,
+) -> Result<Option<Wiring>, WiringError> {
+    let (Some(prospero), Some(gonzalo_url)) = (prospero, &config.gonzalo_url) else {
+        tracing::warn!(
+            "ARIEL_PROSPERO_URL and ARIEL_GONZALO_URL are not both set; serving health only"
         );
         return Ok(None);
     };
     let Some(provider) = provider(config)? else {
-        eprintln!("arield: no chat provider is configured; serving health only");
+        tracing::warn!("no chat provider is configured; serving health only");
         return Ok(None);
     };
 
-    let mut prospero = ProsperoClient::new(prospero_url)
-        .map_err(|error| WiringError::Prospero(error.to_string()))?;
-    if let Some(token) = &config.prospero_token {
-        prospero = prospero.with_token(token.expose());
-    }
     let token = config.gonzalo_token.as_ref().map_or("", Secret::expose);
     let records = Records::connect(gonzalo_url, token, Identity::new("arield"))
         .map_err(|error| WiringError::Gonzalo(error.to_string()))?;
