@@ -14,10 +14,9 @@
 
 use std::future::Future;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use ariel_core::chat::{ChatProvider, Inbound, Message, ProviderId, Visibility};
-use ariel_core::link;
+use ariel_core::chat::{ChatProvider, Inbound, ProviderId};
+use ariel_core::commands;
 use ariel_core::notify::{Notifier, NotifyConfig, Route};
 use ariel_core::prospero::types::SessionInfo;
 use ariel_core::prospero::{ClientError, FleetWatcher, ProsperoClient, WatchConfig};
@@ -98,12 +97,17 @@ pub async fn run(
         .map(|route| Notifier::new(provider.clone(), route, notify.clone()).spawn(CHANNEL_BUFFER))
         .collect();
 
-    // Commands. Only `/ariel link` exists so far (#16); a registration failure is
-    // logged rather than fatal, so notifications keep flowing.
-    if let Err(error) = provider.register_commands(&[link::COMMAND]).await {
+    // Commands (#16, #20). A registration failure is logged rather than fatal,
+    // so notifications keep flowing.
+    if let Err(error) = provider.register_commands(commands::ALL).await {
         tracing::warn!(%error, "could not register chat commands");
     }
-    let commands = tokio::spawn(dispatch(provider.clone(), records.clone()));
+    let context = commands::Context {
+        records: records.clone(),
+        prospero: prospero.clone(),
+        dashboard: notify.dashboard.clone(),
+    };
+    let commands = tokio::spawn(dispatch(provider.clone(), context));
 
     let (mut events, watcher) = FleetWatcher::new(prospero, watch).spawn(FLEET_BUFFER);
     let mut shutdown = std::pin::pin!(shutdown);
@@ -156,31 +160,14 @@ pub async fn report_prospero_identity(prospero: &ProsperoClient) {
 
 /// Answer commands as they arrive, each on its own task so a slow one never
 /// holds up the next.
-async fn dispatch(provider: Arc<dyn ChatProvider>, records: Records) {
+async fn dispatch(provider: Arc<dyn ChatProvider>, context: commands::Context) {
+    let context = Arc::new(context);
     let mut inbound = provider.inbound();
     while let Some(item) = inbound.next().await {
         let Inbound::Command(command) = item else {
             continue;
         };
-        let records = records.clone();
-        tokio::spawn(async move {
-            if command.name == link::COMMAND.name {
-                link::respond(&records, &command, now_ms()).await;
-                return;
-            }
-            // Registered commands only reach here once #20 defines more of them.
-            let reply = Message::text(format!("`/ariel {}` is not available yet.", command.name));
-            if let Err(error) = command.responder.reply(&reply, Visibility::Private).await {
-                tracing::warn!(%error, command = %command.name, "could not answer a command");
-            }
-        });
+        let context = Arc::clone(&context);
+        tokio::spawn(async move { commands::respond(&context, &command).await });
     }
-}
-
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| {
-            i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
-        })
 }

@@ -15,15 +15,15 @@ Ariel is designed as one bridge at four depths, each shippable on its own.
 | Layer | Direction | What it does | State |
 |---|---|---|---|
 | Notifications | out | Agent started, changed status, finished | **Built.** `arield` watches the fleet and posts a live message per agent to every channel configured to follow its workspace. |
-| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Plumbing done.** Discord registers and receives `/ariel` subcommands, and the prospero client can spawn, kill and respawn. `/ariel link` works; the fleet commands are next (#20). |
+| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Started.** `/ariel link`, `/ariel status` and `/ariel spawn` work ([Chat Commands](./commands.md)); kill and restart are not built yet. |
 | Approvals | both, narrow | Approve or deny a risky action with buttons | **Designed, deferred** (#6). Blocked on upstream caliban and prospero work. |
 | Conversational | both, full | A chat thread is an agent session | **Designed, deferred** (#7). |
 
 Commands are authorized on two keys: a person's role and a ceiling set on the
 channel, the lower of the two winning ([ADR 0009](./adr/0009-channel-config.md)).
 The authorization and its audit trail are built
-([ADR 0012](./adr/0012-command-authorization-and-audit.md)); no command uses them
-yet (#20).
+([ADR 0012](./adr/0012-command-authorization-and-audit.md)), and `/ariel status`
+and `/ariel spawn` go through them.
 
 ## Built
 
@@ -77,8 +77,10 @@ yet (#20).
 - Connects to prosperod, gonzalod and Discord, reads the channel configuration
   records belonging to the running provider, and notifies each channel that
   follows an event's workspace. Without those settings it serves health only.
-- Registers `/ariel link` and answers it privately, linking the account and
-  granting the token's role.
+- Registers `/ariel link`, `/ariel status` and `/ariel spawn`. Link answers
+  privately, linking the account and granting the token's role; status and spawn
+  are authorized on two keys, and every spawn is audited
+  ([Chat Commands](./commands.md)).
 - Does not replay what it missed across a restart
   ([ADR 0011](./adr/0011-no-replay-after-a-restart.md)).
 - Prints the chat providers compiled into the build.
@@ -110,8 +112,7 @@ One thin thread through every seam, Discord only.
 
 | Issue | Work | Blocked by |
 |---|---|---|
-| [#20](https://github.com/caliban-ai/ariel/issues/20) | `/ariel status` and `/ariel spawn` | — |
-| [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | #20 |
+| [#21](https://github.com/caliban-ai/ariel/issues/21) | Headless end-to-end smoke with real prosperod and gonzalod | — |
 
 Not yet decided or built, and not scheduled: the Slack and Teams backends, and
 core message fallbacks (truncation, dropping actions when a platform has no
