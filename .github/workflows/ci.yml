@@ -64,17 +64,19 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: cargo fmt --all -- --check
 
+      # ariel-e2e pulls in prosperod and gonzalod themselves, a much larger
+      # build; it has its own job below so this one stays fast.
       - name: cargo clippy
         if: steps.changes.outputs.code == 'true'
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --exclude ariel-e2e --all-targets -- -D warnings
 
       - name: cargo build
         if: steps.changes.outputs.code == 'true'
-        run: cargo build --workspace --all-targets
+        run: cargo build --workspace --exclude ariel-e2e --all-targets
 
       - name: cargo test
         if: steps.changes.outputs.code == 'true'
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude ariel-e2e
 
       # Features are additive (ADR 0004): a build with no chat backend must
       # still compile, lint and pass its tests.
@@ -99,6 +101,35 @@ jobs:
       - name: Docs-only change — Rust CI skipped
         if: steps.changes.outputs.code != 'true'
         run: echo "Only docs/markdown/license changed; skipping cargo fmt/clippy/build/test."
+
+  # The headless end-to-end smoke test (#21): arield against prosperod's and
+  # gonzalod's own server code, with prospero's fake caliban standing in for
+  # agents. No network beyond loopback, no model API keys.
+  e2e:
+    name: end-to-end smoke
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        if: needs.check.outputs.code == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Cache cargo registry & target
+        if: needs.check.outputs.code == 'true'
+        uses: Swatinem/rust-cache@v2
+      - name: cargo clippy (ariel-e2e)
+        if: needs.check.outputs.code == 'true'
+        run: cargo clippy -p ariel-e2e --all-targets -- -D warnings
+      - name: cargo test (ariel-e2e)
+        if: needs.check.outputs.code == 'true'
+        run: cargo test -p ariel-e2e
+      - name: Docs-only change — smoke test skipped
+        if: needs.check.outputs.code != 'true'
+        run: echo "Only docs/markdown/license changed; skipping the end-to-end smoke test."
 
   coverage:
     name: line-coverage gate

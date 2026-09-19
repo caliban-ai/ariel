@@ -17,6 +17,10 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
   authorized on the person's role and the channel's ceiling; every spawn is
   audited, and prosperod errors reach the person as plain sentences
   ([Chat Commands](docs/guide/src/commands.md)).
+- A headless end-to-end smoke test in its own CI job (#21): the bridge against
+  prosperod's and gonzalod's own server code, with token authentication on and
+  prospero's fake caliban for agents, covering linking, a spawn from chat, its
+  notification to the finish, and fleet status.
 
 ### Fixed
 

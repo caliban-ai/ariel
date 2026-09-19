@@ -86,7 +86,10 @@ echo "coverage floor: ${COVERAGE_MIN}% line coverage (COVERAGE_MIN)"
 
 # Gather coverage once and write the LCOV report. The threshold is enforced as
 # a separate final step, so the report exists even when the gate fails.
-run cargo llvm-cov --workspace \
+# ariel-e2e holds no Ariel code, only the end-to-end smoke test, which CI runs
+# in its own job; instrumenting prosperod and gonzalod for it would only slow
+# the gate.
+run cargo llvm-cov --workspace --exclude ariel-e2e \
     --ignore-filename-regex "$IGNORE_REGEX" --lcov --output-path "$LCOV_PATH"
 
 if [[ $DO_HTML -eq 1 ]]; then

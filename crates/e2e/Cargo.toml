@@ -1,0 +1,34 @@
+[package]
+name = "ariel-e2e"
+description = "Headless end-to-end smoke test: arield against a real prosperod and gonzalod"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# Nothing here ships: the crate exists for `tests/smoke.rs`, which runs the
+# real bridge against prosperod's and gonzalod's own server code in-process
+# (#21). Keeping it in its own crate keeps prospero and gonzalo-server out of
+# every other crate's dependency tree.
+
+[dev-dependencies]
+ariel-core.workspace = true
+ariel-daemon = { path = "../daemon", default-features = false }
+axum.workspace = true
+gonzalo = { workspace = true, features = ["fs"] }
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
+
+# gonzalod's HTTP service and filesystem store, as the `gonzalod` binary
+# assembles them.
+gonzalo-core = "0.7"
+gonzalo-server = "0.7"
+gonzalo-store-fs = "0.7"
+
+# prosperod's API and fleet manager, driving prospero's `FakeCaliband`: real
+# agent lifecycle and event streams with no caliban and no model. prospero is
+# not on crates.io, so it comes from its public repository at a release tag.
+prospero-api = { git = "https://github.com/caliban-ai/prospero", tag = "v0.8.1" }
+prospero-core = { git = "https://github.com/caliban-ai/prospero", tag = "v0.8.1", features = ["testkit"] }
