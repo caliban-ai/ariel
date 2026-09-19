@@ -7,6 +7,7 @@
 pub mod auth;
 pub mod channels;
 pub mod chat;
+pub mod commands;
 pub mod link;
 pub mod notify;
 pub mod prospero;

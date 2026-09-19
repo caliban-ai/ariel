@@ -10,6 +10,14 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+### Added
+
+- `/ariel status` summarizes the workspaces a channel follows, and
+  `/ariel spawn <workspace> <prompt>` starts an agent (#20). Both are
+  authorized on the person's role and the channel's ceiling; every spawn is
+  audited, and prosperod errors reach the person as plain sentences
+  ([Chat Commands](docs/guide/src/commands.md)).
+
 ### Fixed
 
 - `arield` now writes its log to stderr, so it shows up in `kubectl logs`. Before

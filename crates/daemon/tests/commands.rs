@@ -84,7 +84,7 @@ fn private_replies(log: &[Recorded]) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn the_bridge_registers_the_link_command() {
+async fn the_bridge_registers_every_command() {
     let (_dir, records) = store();
     let provider = Arc::new(ConsoleProvider::new());
     let (stop, bridge) = start(provider.clone(), records).await;
@@ -92,9 +92,31 @@ async fn the_bridge_registers_the_link_command() {
     bridge.await.unwrap().unwrap();
 
     let registered = provider.log().iter().any(|entry| {
-        matches!(entry, Recorded::CommandsRegistered(names) if names.iter().any(|n| n == "link"))
+        matches!(entry, Recorded::CommandsRegistered(names) if names == &["link", "status", "spawn"])
     });
     assert!(registered, "{:?}", provider.log());
+}
+
+#[tokio::test]
+async fn ariel_status_reaches_the_command_router() {
+    let (_dir, records) = store();
+    let provider = Arc::new(ConsoleProvider::new());
+    let (stop, bridge) = start(provider.clone(), records).await;
+
+    // No channel configuration: the router answers with the fix, privately.
+    provider.inject_command(
+        UserRef::new("console", "t1", "user-7"),
+        here(),
+        "status",
+        Args::default(),
+    );
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let _ = stop.send(());
+    bridge.await.unwrap().unwrap();
+
+    let replies = private_replies(&provider.log());
+    assert_eq!(replies.len(), 1, "{replies:?}");
+    assert!(replies[0].contains("ariel channel set"), "{replies:?}");
 }
 
 #[tokio::test]
@@ -184,7 +206,7 @@ async fn a_bad_token_is_refused_privately_without_echoing_it() {
 }
 
 #[tokio::test]
-async fn an_unknown_command_gets_a_private_not_available_reply() {
+async fn an_unknown_command_gets_a_private_reply() {
     let (_dir, records) = store();
     let provider = Arc::new(ConsoleProvider::new());
     let (stop, bridge) = start(provider.clone(), records).await;
@@ -192,7 +214,7 @@ async fn an_unknown_command_gets_a_private_not_available_reply() {
     provider.inject_command(
         UserRef::new("console", "t1", "user-9"),
         here(),
-        "spawn",
+        "dance",
         Args::default(),
     );
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -201,5 +223,8 @@ async fn an_unknown_command_gets_a_private_not_available_reply() {
 
     let replies = private_replies(&provider.log());
     assert_eq!(replies.len(), 1, "{replies:?}");
-    assert!(replies[0].contains("not available"), "{replies:?}");
+    assert!(
+        replies[0].contains("not a command Ariel knows"),
+        "{replies:?}"
+    );
 }
