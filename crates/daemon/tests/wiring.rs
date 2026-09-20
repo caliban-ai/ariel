@@ -149,6 +149,7 @@ async fn an_agent_notifies_only_the_channels_following_its_workspace() {
             reconnect_delay: Duration::from_millis(20),
             linger: Duration::from_millis(50),
         },
+        channel_reload: bridge::CHANNEL_RELOAD,
     };
 
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
@@ -247,6 +248,7 @@ async fn a_bridge_with_no_configured_channels_still_runs_and_stops() {
         prospero: stub_prosperod().await,
         notify: NotifyConfig::default(),
         watch: WatchConfig::default(),
+        channel_reload: bridge::CHANNEL_RELOAD,
     };
 
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();

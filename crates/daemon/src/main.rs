@@ -173,6 +173,7 @@ fn wiring(
             ..NotifyConfig::default()
         },
         watch: WatchConfig::default(),
+        channel_reload: config.channel_reload,
     }))
 }
 

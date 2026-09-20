@@ -10,6 +10,15 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+### Fixed
+
+- `arield` now picks up channel configuration changes while it runs (#56). A
+  channel record written after startup was invisible until the process
+  restarted — adding a chat channel meant restarting the daemon. It re-reads
+  the records every `ARIEL_CHANNEL_RELOAD_SECS` (60 by default), starting,
+  stopping and restarting notifiers as records appear, vanish or change. A
+  failed read keeps the channels already served.
+
 ## [0.2.0] - 2026-09-19
 
 Ariel answers for the fleet, not just about it.

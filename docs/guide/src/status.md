@@ -77,6 +77,10 @@ and `/ariel spawn` go through them.
 - Connects to prosperod, gonzalod and Discord, reads the channel configuration
   records belonging to the running provider, and notifies each channel that
   follows an event's workspace. Without those settings it serves health only.
+- Re-reads the channel records while running
+  (`ARIEL_CHANNEL_RELOAD_SECS`, 60s by default), so a channel added, retired or
+  re-scoped takes effect without a restart. A failed read keeps the channels
+  already served rather than dropping them.
 - Registers `/ariel link`, `/ariel status` and `/ariel spawn`. Link answers
   privately, linking the account and granting the token's role; status and spawn
   are authorized on two keys, and every spawn is audited
