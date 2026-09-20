@@ -37,6 +37,7 @@ async fn start(
     tokio::sync::oneshot::Sender<()>,
     tokio::task::JoinHandle<Result<(), bridge::BridgeError>>,
 ) {
+    let console = provider.clone();
     let wiring = Wiring {
         provider,
         records,
@@ -51,9 +52,40 @@ async fn start(
         })
         .await
     });
-    // Let the bridge register commands and start listening.
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Wait for the bridge to register its commands, which is the point it is
+    // listening. Polled rather than slept: a fixed wait passes on a quiet
+    // machine and flakes on a loaded CI runner.
+    eventually("command registration", || {
+        console
+            .log()
+            .iter()
+            .any(|entry| matches!(entry, Recorded::CommandsRegistered(_)))
+    })
+    .await;
     (stop, bridge)
+}
+
+/// How long a test waits for the bridge to do something before giving up.
+const STEP: Duration = Duration::from_secs(10);
+
+/// Poll `done` until it holds, or fail the test.
+async fn eventually(what: &str, done: impl Fn() -> bool) {
+    let deadline = std::time::Instant::now() + STEP;
+    while !done() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for {what}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// Wait for the bridge to answer a command privately.
+async fn wait_for_private_reply(provider: &ConsoleProvider) {
+    eventually("a private reply", || {
+        !private_replies(&provider.log()).is_empty()
+    })
+    .await;
 }
 
 fn store() -> (tempfile::TempDir, Records) {
@@ -110,7 +142,7 @@ async fn ariel_status_reaches_the_command_router() {
         "status",
         Args::default(),
     );
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    wait_for_private_reply(&provider).await;
     let _ = stop.send(());
     bridge.await.unwrap().unwrap();
 
@@ -149,7 +181,7 @@ async fn ariel_link_in_chat_links_the_account_and_answers_privately() {
         "link",
         Args::from_pairs([("token", minted.token.as_str())]),
     );
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    wait_for_private_reply(&provider).await;
     let _ = stop.send(());
     bridge.await.unwrap().unwrap();
 
@@ -195,7 +227,7 @@ async fn a_bad_token_is_refused_privately_without_echoing_it() {
         "link",
         Args::from_pairs([("token", guess.as_str())]),
     );
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    wait_for_private_reply(&provider).await;
     let _ = stop.send(());
     bridge.await.unwrap().unwrap();
 
@@ -217,7 +249,7 @@ async fn an_unknown_command_gets_a_private_reply() {
         "dance",
         Args::default(),
     );
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_for_private_reply(&provider).await;
     let _ = stop.send(());
     bridge.await.unwrap().unwrap();
 
