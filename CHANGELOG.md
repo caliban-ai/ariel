@@ -10,6 +10,15 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+### Added
+
+- `/ariel kill <agent>` stops an agent and `/ariel respawn <agent>` restarts it
+  from the prompt it was given, naming the restarted agent's new id (#57). Both
+  need an operator in the agent's own workspace: the agent is looked up in the
+  fleet first, and authorization is against the workspace it is in. A channel
+  with no configuration is refused before the fleet is read, so it cannot be
+  used to discover which agents exist.
+
 ### Fixed
 
 - `arield` now picks up channel configuration changes while it runs (#56). A

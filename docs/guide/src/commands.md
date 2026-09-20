@@ -8,6 +8,17 @@ Discord each subcommand is a typed slash command with its own options.
 | `/ariel link <token>` | nothing | Links your chat account to your fleet identity with a token an administrator gave you ([The `ariel` CLI](./cli.md#link-a-chat-account)). Works in any channel, and the reply is private. |
 | `/ariel status` | `viewer`, fleet-wide | Summarizes the workspaces this channel follows: how many agents are active, each workspace's agents by status, and any workspace prosperod cannot reach. Links the dashboard. |
 | `/ariel spawn <workspace> <prompt>` | `operator` for that workspace | Starts an agent in `workspace` with `prompt`, and replies with its id. The channel's live notifications take it from there. |
+| `/ariel kill <agent>` | `operator` for the agent's workspace | Stops an agent. |
+| `/ariel respawn <agent>` | `operator` for the agent's workspace | Restarts an agent from the prompt it was given. The restarted agent has a **new id**, which the reply names. |
+
+`kill` and `respawn` name an agent rather than a workspace, so Ariel looks the
+agent up in the fleet first and authorizes against the workspace it is in. An
+agent the fleet does not have is refused without asking prosperod to do
+anything, and nothing is audited, because nothing was attempted.
+
+A channel with no configuration is refused before the fleet is read at all, so
+it cannot be used to find out which agents exist: the refusal reads the same
+whether or not the agent is real.
 
 ## Who may run what
 
@@ -39,8 +50,10 @@ administrator needs to check it, and `arield` logs an error naming
 
 ## Audit
 
-Every `/ariel spawn` leaves exactly one audit entry in gonzalo, action
-`command.spawn`, target the workspace: `Denied` when refused, and `Succeeded` or
-`Failed` according to what prosperod did. A spawn with a missing workspace or
-prompt is answered with the usage and not audited, since nothing was attempted.
+Every `/ariel spawn`, `/ariel kill` and `/ariel respawn` leaves exactly one
+audit entry in gonzalo — action `command.spawn`, `command.kill` or
+`command.respawn`, target the workspace: `Denied` when refused, and `Succeeded` or
+`Failed` according to what prosperod did. A command with a missing argument, or
+one naming an agent the fleet does not have, is answered with the usage or a
+refusal and not audited, since nothing was attempted.
 `/ariel status` is read-only and not audited.
