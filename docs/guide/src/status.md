@@ -15,7 +15,7 @@ Ariel is designed as one bridge at four depths, each shippable on its own.
 | Layer | Direction | What it does | State |
 |---|---|---|---|
 | Notifications | out | Agent started, changed status, finished | **Built.** `arield` watches the fleet and posts a live message per agent to every channel configured to follow its workspace. |
-| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Started.** `/ariel link`, `/ariel status` and `/ariel spawn` work ([Chat Commands](./commands.md)); kill and restart are not built yet. |
+| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Built.** `/ariel link`, `/ariel status`, `/ariel spawn`, `/ariel kill` and `/ariel respawn` ([Chat Commands](./commands.md)). |
 | Approvals | both, narrow | Approve or deny a risky action with buttons | **Designed, deferred** (#6). Blocked on upstream caliban and prospero work. |
 | Conversational | both, full | A chat thread is an agent session | **Designed, deferred** (#7). |
 

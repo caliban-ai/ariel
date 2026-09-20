@@ -44,6 +44,9 @@ enum Prosperod {
 struct Stub {
     mode: Prosperod,
     spawns: Arc<AtomicUsize>,
+    /// Calls to kill or respawn, counted apart from spawns so a test can prove
+    /// a refused command never reached prosperod.
+    actions: Arc<AtomicUsize>,
 }
 
 async fn fleet(State(stub): State<Stub>) -> Response {
@@ -109,21 +112,56 @@ fn failure(mode: Prosperod) -> Option<Response> {
     }
 }
 
-async fn prosperod(mode: Prosperod) -> (ProsperoClient, Arc<AtomicUsize>) {
-    let spawns = Arc::new(AtomicUsize::new(0));
+/// `POST /api/agents/{id}/kill`, which prosperod accepts without a body.
+async fn kill(State(stub): State<Stub>, Path(agent): Path<String>) -> Response {
+    stub.actions.fetch_add(1, Ordering::SeqCst);
+    if let Some(failure) = failure(stub.mode) {
+        return failure;
+    }
+    if agent == "gone" {
+        return (
+            StatusCode::NOT_FOUND,
+            axum::Json(json!({"error": format!("agent not found: {agent}"), "kind": "not_found"})),
+        )
+            .into_response();
+    }
+    StatusCode::ACCEPTED.into_response()
+}
+
+/// `POST /api/agents/{id}/respawn`: the restarted agent has a new id.
+async fn respawn(State(stub): State<Stub>, Path(_agent): Path<String>) -> Response {
+    stub.actions.fetch_add(1, Ordering::SeqCst);
+    if let Some(failure) = failure(stub.mode) {
+        return failure;
+    }
+    axum::Json(json!({"agent_id": "a-restarted"})).into_response()
+}
+
+/// The call counters a test can read: spawns, and kills plus respawns.
+#[derive(Clone, Default)]
+struct Calls {
+    spawns: Arc<AtomicUsize>,
+    actions: Arc<AtomicUsize>,
+}
+
+async fn prosperod(mode: Prosperod) -> (ProsperoClient, Calls) {
+    let calls = Calls::default();
     let app = Router::new()
         .route("/api/fleet", get(fleet))
         .route("/api/workspaces/{workspace}/agents", post(spawn))
+        .route("/api/agents/{agent}/kill", post(kill))
+        .route("/api/agents/{agent}/respawn", post(respawn))
         .with_state(Stub {
             mode,
-            spawns: Arc::clone(&spawns),
+            spawns: Arc::clone(&calls.spawns),
+            actions: Arc::clone(&calls.actions),
         });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     (
         ProsperoClient::new(&format!("http://{addr}")).unwrap(),
-        spawns,
+        calls,
     )
 }
 
@@ -142,16 +180,16 @@ struct Harness {
     console: ConsoleProvider,
     inbound: BoxStream<'static, Inbound>,
     context: Context,
-    spawns: Arc<AtomicUsize>,
+    calls: Calls,
 }
 
 impl Harness {
     async fn new(mode: Prosperod) -> Self {
-        let (prospero, spawns) = prosperod(mode).await;
-        Self::with_prospero(prospero, spawns)
+        let (prospero, calls) = prosperod(mode).await;
+        Self::with_prospero(prospero, calls)
     }
 
-    fn with_prospero(prospero: ProsperoClient, spawns: Arc<AtomicUsize>) -> Self {
+    fn with_prospero(prospero: ProsperoClient, calls: Calls) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let records = Records::new(
             Arc::new(FsStore::new(dir.path())),
@@ -170,7 +208,7 @@ impl Harness {
             console,
             inbound,
             context,
-            spawns,
+            calls,
         }
     }
 
@@ -257,7 +295,16 @@ impl Harness {
     }
 
     fn spawns(&self) -> usize {
-        self.spawns.load(Ordering::SeqCst)
+        self.calls.spawns.load(Ordering::SeqCst)
+    }
+
+    /// Kills and respawns that reached prosperod.
+    fn actions(&self) -> usize {
+        self.calls.actions.load(Ordering::SeqCst)
+    }
+
+    async fn on_agent(&mut self, command: &str, agent: &str) -> (Visibility, Message) {
+        self.run(command, &[("agent", agent)]).await
     }
 
     async fn audit(&self) -> Vec<AuditEntry> {
@@ -562,7 +609,7 @@ async fn a_prosperod_server_error_is_reported_with_its_message() {
 #[tokio::test]
 async fn an_unreachable_prosperod_asks_to_try_again() {
     let prospero = unreachable_prosperod().await;
-    let mut harness = Harness::with_prospero(prospero, Arc::default());
+    let mut harness = Harness::with_prospero(prospero, Calls::default());
     harness.fleet_channel(Role::Admin, Role::Admin).await;
 
     let (visibility, reply) = harness.run("status", &[]).await;
@@ -609,7 +656,170 @@ async fn an_unknown_command_gets_a_private_answer() {
 #[test]
 fn every_command_is_registered_once() {
     let names: Vec<_> = commands::ALL.iter().map(|spec| spec.name).collect();
-    assert_eq!(names, ["link", "status", "spawn"]);
+    assert_eq!(names, ["link", "status", "spawn", "kill", "respawn"]);
     assert_eq!(commands::STATUS.min_role, Role::Viewer);
     assert_eq!(commands::SPAWN.min_role, Role::Operator);
+    assert_eq!(commands::KILL.min_role, Role::Operator);
+    assert_eq!(commands::RESPAWN.min_role, Role::Operator);
+}
+
+// --- /ariel kill and /ariel respawn (#57) ---------------------------------
+
+#[tokio::test]
+async fn killing_and_respawning_need_both_role_and_ceiling_at_operator() {
+    for command in ["kill", "respawn"] {
+        for role in ROLES {
+            for ceiling in ROLES {
+                let mut harness = Harness::new(Prosperod::Normal).await;
+                harness.fleet_channel(role, ceiling).await;
+
+                let (visibility, reply) = harness.on_agent(command, "a1").await;
+
+                let allowed = role.min(ceiling) >= Role::Operator;
+                let case = format!("{command} as {role:?} under {ceiling:?}: {reply:?}");
+                if allowed {
+                    assert_eq!(visibility, Visibility::Public, "{case}");
+                    assert_eq!(reply.severity, Severity::Success, "{case}");
+                    assert!(reply.body.contains("`a1`"), "{case}");
+                    assert!(reply.body.contains("`caliban`"), "{case}");
+                    assert_eq!(harness.actions(), 1, "{case}");
+                } else {
+                    assert_eq!(visibility, Visibility::Private, "{case}");
+                    assert!(reply.body.contains("needs **operator**"), "{case}");
+                    assert_eq!(
+                        harness.actions(),
+                        0,
+                        "a refused {command} reached prosperod"
+                    );
+                }
+
+                let audit = harness.audit().await;
+                assert_eq!(audit.len(), 1, "one audit entry either way: {case}");
+                assert_eq!(audit[0].action, format!("command.{command}"));
+                assert_eq!(audit[0].target, "caliban", "audited against the workspace");
+                assert_eq!(
+                    audit[0].result,
+                    if allowed {
+                        AuditResult::Succeeded
+                    } else {
+                        AuditResult::Denied
+                    },
+                    "{case}"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn respawning_names_the_new_agent() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Operator, Role::Operator).await;
+
+    let (_, reply) = harness.on_agent("respawn", "a1").await;
+
+    assert!(reply.body.contains("`a-restarted`"), "{reply:?}");
+    assert!(
+        reply.body.contains("`a1`"),
+        "the old id is named too: {reply:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_the_fleet_does_not_have_is_refused_without_calling_prosperod() {
+    for command in ["kill", "respawn"] {
+        let mut harness = Harness::new(Prosperod::Normal).await;
+        harness.fleet_channel(Role::Admin, Role::Admin).await;
+
+        let (visibility, reply) = harness.on_agent(command, "nobody").await;
+
+        assert_eq!(visibility, Visibility::Private);
+        assert_eq!(reply.body, "No agent called `nobody` is in the fleet.");
+        assert_eq!(harness.actions(), 0, "prosperod was asked anyway");
+        assert!(
+            harness.audit().await.is_empty(),
+            "nothing was attempted, so nothing is audited"
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_unconfigured_channel_learns_nothing_about_the_fleet() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.link().await;
+    harness.grant(GrantScope::Fleet, Role::Admin).await;
+
+    // Asking about an agent that does not exist is the case that tells the two
+    // orderings apart: if the channel were checked after the fleet lookup, the
+    // reply would say whether `nobody` is in the fleet, which is precisely what
+    // an unconfigured channel must not be able to find out.
+    let (visibility, reply) = harness.on_agent("kill", "nobody").await;
+
+    assert_eq!(visibility, Visibility::Private);
+    assert!(reply.body.contains("ariel channel set"), "{reply:?}");
+    assert!(
+        !reply.body.contains("in the fleet"),
+        "an unconfigured channel was told about the fleet: {reply:?}"
+    );
+    assert_eq!(harness.actions(), 0);
+
+    // And the same refusal for an agent that does exist, so the two are
+    // indistinguishable from outside.
+    let (_, existing) = harness.on_agent("kill", "a1").await;
+    assert_eq!(existing.body, reply.body);
+}
+
+#[tokio::test]
+async fn an_agent_outside_the_channels_workspaces_is_refused() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness
+        .configure(
+            Follows::Workspaces {
+                names: ["prospero".to_owned()].into_iter().collect(),
+            },
+            Role::Admin,
+        )
+        .await;
+    harness.link().await;
+    harness.grant(GrantScope::Fleet, Role::Admin).await;
+
+    // `a1` is in caliban, which this channel does not follow.
+    let (visibility, reply) = harness.on_agent("kill", "a1").await;
+
+    assert_eq!(visibility, Visibility::Private);
+    assert!(
+        reply.body.contains("doesn't follow workspace `caliban`"),
+        "{reply:?}"
+    );
+    assert_eq!(harness.actions(), 0);
+}
+
+#[tokio::test]
+async fn killing_without_naming_an_agent_shows_usage() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Admin, Role::Admin).await;
+
+    let (visibility, reply) = harness.run("kill", &[("agent", "  ")]).await;
+
+    assert_eq!(visibility, Visibility::Private);
+    assert!(reply.body.contains("/ariel kill <agent>"), "{reply:?}");
+    assert_eq!(harness.actions(), 0);
+    assert!(harness.audit().await.is_empty());
+}
+
+#[tokio::test]
+async fn a_prosperod_failure_on_kill_is_readable_and_audited() {
+    let mut harness = Harness::new(Prosperod::Broken).await;
+    harness.fleet_channel(Role::Admin, Role::Admin).await;
+
+    // The fleet read fails first on a broken prosperod, so the person is told
+    // that rather than left with a status code.
+    let (visibility, reply) = harness.on_agent("kill", "a1").await;
+
+    assert_eq!(visibility, Visibility::Private);
+    assert_eq!(reply.severity, Severity::Failure);
+    assert!(
+        reply.body.contains("supervisor crashed"),
+        "prosperod's own words reach the person: {reply:?}"
+    );
 }

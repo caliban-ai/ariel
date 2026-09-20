@@ -4,11 +4,14 @@
 //! - `/ariel status` (viewer) summarizes the part of the fleet the channel
 //!   follows. It acts on no one workspace, so it needs a fleet-wide grant.
 //! - `/ariel spawn <workspace> <prompt>` (operator) starts an agent.
+//! - `/ariel kill <agent>` and `/ariel respawn <agent>` (operator) stop and
+//!   restart one. They name an agent rather than a workspace, so the agent's
+//!   workspace is resolved from the fleet before it can be authorized.
 //!
 //! Every command except `link` goes through [`auth::authorize`], which audits a
 //! denied mutating command itself. The router records how an allowed one went
-//! with [`auth::record_outcome`], so a spawn leaves exactly one audit entry
-//! whichever way it ends.
+//! with [`auth::record_outcome`], so each mutating command leaves exactly one
+//! audit entry whichever way it ends.
 //!
 //! **Replies.** A result is public, so the channel sees the fleet and who
 //! started what. A denial or failure is private to the person who asked: it
@@ -16,8 +19,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::auth::{self, Decision, Denial, Request};
-use crate::chat::{ArgSpec, Command, CommandSpec, Message, Role, Severity, Url, Visibility};
+use crate::auth::{self, AuthError, Decision, Denial, Request};
+use crate::chat::{
+    ArgSpec, ChannelRef, Command, CommandSpec, Message, Role, Severity, Url, Visibility,
+};
 use crate::link;
 use crate::prospero::types::{AgentStatus, FleetSnapshot, SpawnRequest, WorkspaceHealth};
 use crate::prospero::{ClientError, ProsperoClient};
@@ -53,8 +58,32 @@ pub const SPAWN: CommandSpec = CommandSpec {
     min_role: Role::Operator,
 };
 
+const AGENT_ARG: ArgSpec = ArgSpec {
+    name: "agent",
+    summary: "The agent's id, as the fleet status and notifications show it",
+    required: true,
+};
+
+/// `/ariel kill <agent>`: stops an agent, so it needs an operator in the
+/// agent's own workspace, and is audited.
+pub const KILL: CommandSpec = CommandSpec {
+    name: "kill",
+    summary: "Stop an agent",
+    args: &[AGENT_ARG],
+    min_role: Role::Operator,
+};
+
+/// `/ariel respawn <agent>`: restarts an agent from its original prompt. The
+/// restarted agent has a new id.
+pub const RESPAWN: CommandSpec = CommandSpec {
+    name: "respawn",
+    summary: "Restart an agent, from the prompt it was given",
+    args: &[AGENT_ARG],
+    min_role: Role::Operator,
+};
+
 /// Every command Ariel registers with a chat platform.
-pub const ALL: &[CommandSpec] = &[link::COMMAND, STATUS, SPAWN];
+pub const ALL: &[CommandSpec] = &[link::COMMAND, STATUS, SPAWN, KILL, RESPAWN];
 
 /// What the commands need to answer.
 #[derive(Debug, Clone)]
@@ -75,6 +104,8 @@ pub async fn respond(context: &Context, command: &Command) {
         }
         name if name == STATUS.name => status(context, command).await,
         name if name == SPAWN.name => spawn(context, command).await,
+        name if name == KILL.name => on_agent(context, command, &KILL).await,
+        name if name == RESPAWN.name => on_agent(context, command, &RESPAWN).await,
         other => (
             warning(format!("`/ariel {other}` is not a command Ariel knows.")),
             Visibility::Private,
@@ -198,6 +229,118 @@ async fn spawn(context: &Context, command: &Command) -> (Message, Visibility) {
             Visibility::Private,
         ),
     }
+}
+
+/// `/ariel kill` and `/ariel respawn`, which differ only in what they ask
+/// prosperod to do.
+///
+/// Both act on an agent rather than a workspace, and authorization is by
+/// workspace ([ADR 0012](../../docs/adr/0012-command-authorization-and-audit.md)),
+/// so the agent's workspace has to be resolved first. The order matters: the
+/// channel's configuration is checked before anything is said about the fleet,
+/// so an unconfigured channel cannot be used to find out which agents exist.
+async fn on_agent(
+    context: &Context,
+    command: &Command,
+    spec: &CommandSpec,
+) -> (Message, Visibility) {
+    let Some(agent) = command
+        .args
+        .get(AGENT_ARG.name)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            warning(format!("Name the agent: `/ariel {} <agent>`.", spec.name)),
+            Visibility::Private,
+        );
+    };
+
+    let channel = command.at.channel();
+    // Checked before the fleet is read: an unconfigured channel must not be
+    // able to find out which agents exist, so its refusal cannot depend on the
+    // answer.
+    match configured(context, channel).await {
+        Err(error) => return internal_failure(&error, spec.name),
+        Ok(false) => {
+            return (
+                denied(&Denial::ChannelNotConfigured, spec),
+                Visibility::Private,
+            );
+        }
+        Ok(true) => {}
+    }
+
+    let workspace = match context.prospero.fleet().await {
+        Err(error) => return (prospero_failure(&error, None), Visibility::Private),
+        Ok(fleet) => match fleet.agents().find(|known| known.id == agent) {
+            Some(known) => known.workspace.clone(),
+            None => {
+                return (
+                    warning(format!("No agent called `{agent}` is in the fleet.")),
+                    Visibility::Private,
+                );
+            }
+        },
+    };
+
+    let request = Request {
+        user: &command.user,
+        channel,
+        command: spec,
+        workspace: Some(&workspace),
+        surface_ref: None,
+    };
+    let decision = match auth::authorize(&context.records, &request).await {
+        Err(error) => return internal_failure(&error, spec.name),
+        // Already audited by `authorize`.
+        Ok(Decision::Denied(denial)) => return (denied(&denial, spec), Visibility::Private),
+        Ok(decision) => decision,
+    };
+
+    let outcome = if spec.name == KILL.name {
+        context
+            .prospero
+            .kill(agent)
+            .await
+            .map(|()| format!("Killing `{agent}` in `{workspace}`."))
+    } else {
+        context.prospero.respawn(agent).await.map(|respawned| {
+            format!(
+                "Respawned `{agent}` in `{workspace}` as `{}`.",
+                respawned.agent_id
+            )
+        })
+    };
+    let result = match &outcome {
+        Ok(_) => AuditResult::Succeeded,
+        Err(error) => AuditResult::Failed(error.to_string()),
+    };
+    if let Err(error) = auth::record_outcome(&context.records, &request, &decision, result).await {
+        tracing::error!(%error, command = spec.name, agent, "could not audit a command");
+    }
+
+    match outcome {
+        Ok(body) => (
+            Message {
+                severity: Severity::Success,
+                link: context.dashboard.clone(),
+                ..Message::text(body)
+            },
+            Visibility::Public,
+        ),
+        Err(error) => (prospero_failure(&error, None), Visibility::Private),
+    }
+}
+
+/// Whether this channel has a configuration record at all.
+async fn configured(context: &Context, channel: &ChannelRef) -> Result<bool, AuthError> {
+    let key = ChannelConfig::key_for(
+        channel.provider.as_str(),
+        channel.tenant.as_str(),
+        &channel.channel,
+    )?;
+    Ok(context.records.get::<ChannelConfig>(&key).await?.is_some())
 }
 
 /// A fleet summary, limited to the workspaces `follows` names.

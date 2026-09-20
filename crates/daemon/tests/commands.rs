@@ -125,7 +125,7 @@ async fn the_bridge_registers_every_command() {
     bridge.await.unwrap().unwrap();
 
     let registered = provider.log().iter().any(|entry| {
-        matches!(entry, Recorded::CommandsRegistered(names) if names == &["link", "status", "spawn"])
+        matches!(entry, Recorded::CommandsRegistered(names) if names == &["link", "status", "spawn", "kill", "respawn"])
     });
     assert!(registered, "{:?}", provider.log());
 }
