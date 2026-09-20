@@ -8,8 +8,11 @@
 use std::fmt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use ariel_core::chat::Url;
+
+use crate::bridge;
 
 const DISCORD_TOKEN_FILE: &str = "ARIEL_DISCORD_TOKEN_FILE";
 const DISCORD_GUILD_ID: &str = "ARIEL_DISCORD_GUILD_ID";
@@ -20,6 +23,7 @@ const DASHBOARD_URL: &str = "ARIEL_DASHBOARD_URL";
 const GONZALO_TOKEN_FILE: &str = "ARIEL_GONZALO_TOKEN_FILE";
 const PROSPERO_TOKEN_FILE: &str = "ARIEL_PROSPERO_TOKEN_FILE";
 const HEALTH_ADDR: &str = "ARIEL_HEALTH_ADDR";
+const CHANNEL_RELOAD_SECS: &str = "ARIEL_CHANNEL_RELOAD_SECS";
 
 /// A credential read from a mounted Secret file. It formats as `[redacted]`,
 /// so it cannot leak into logs or error messages.
@@ -64,6 +68,8 @@ pub enum ConfigError {
     /// Discord IDs are snowflakes: unsigned 64-bit integers.
     #[error("{var}: {value:?} is not a Discord ID")]
     Snowflake { var: String, value: String },
+    #[error("ARIEL_CHANNEL_RELOAD_SECS: {value:?} is not a whole number of seconds above zero")]
+    ChannelReload { value: String },
 }
 
 /// Everything `arield` reads at startup.
@@ -77,6 +83,9 @@ pub struct Config {
     pub prospero_token: Option<Secret>,
     /// Where `/healthz` is served. Defaults to `0.0.0.0:8081`.
     pub health_addr: SocketAddr,
+    /// How often the channel configuration records are re-read, so a channel
+    /// added or retired needs no restart (#56). Defaults to 60 seconds.
+    pub channel_reload: Duration,
     /// prosperod's base URL. Without it the daemon serves health only and
     /// notifies nothing.
     pub prospero_url: Option<String>,
@@ -109,6 +118,20 @@ impl Config {
                 .map_err(|_| ConfigError::HealthAddr { value })?,
         };
 
+        let channel_reload = match lookup(CHANNEL_RELOAD_SECS) {
+            None => bridge::CHANNEL_RELOAD,
+            Some(value) => {
+                let secs = value
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|secs| *secs > 0)
+                    .ok_or_else(|| ConfigError::ChannelReload {
+                        value: value.clone(),
+                    })?;
+                Duration::from_secs(secs)
+            }
+        };
+
         let dashboard_url = lookup(DASHBOARD_URL)
             .map(|value| {
                 Url::parse(&value).map_err(|error| ConfigError::DashboardUrl {
@@ -134,6 +157,7 @@ impl Config {
             gonzalo_token,
             prospero_token,
             health_addr,
+            channel_reload,
             prospero_url: lookup(PROSPERO_URL),
             gonzalo_url: lookup(GONZALO_URL),
             dashboard_url,

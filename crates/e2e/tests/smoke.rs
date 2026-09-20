@@ -232,6 +232,7 @@ async fn link_spawn_notify_and_status_through_real_prosperod_and_gonzalod() {
             poll_interval: Duration::from_millis(200),
             ..WatchConfig::default()
         },
+        channel_reload: bridge::CHANNEL_RELOAD,
     };
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
     let bridge = tokio::spawn(bridge::run(wiring, async {

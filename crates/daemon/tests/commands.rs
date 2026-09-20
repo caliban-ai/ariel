@@ -44,6 +44,7 @@ async fn start(
         prospero: empty_prosperod().await,
         notify: NotifyConfig::default(),
         watch: WatchConfig::default(),
+        channel_reload: bridge::CHANNEL_RELOAD,
     };
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
     let bridge = tokio::spawn(async move {

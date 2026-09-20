@@ -23,7 +23,10 @@ use crate::records::gonzalo::{ChannelConfig, Follows, NotifyPreset};
 use crate::render::{AgentView, render_agent, render_summary};
 
 /// Which events a channel hears, and where they go (ADR 0009).
-#[derive(Debug, Clone)]
+///
+/// Comparable, so a caller re-reading the channel records can tell an unchanged
+/// configuration from one worth restarting a notifier for (#56).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Route {
     channel: ChannelRef,
     destination: Destination,
