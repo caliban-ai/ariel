@@ -10,14 +10,27 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-19
+
+Ariel answers for the fleet, not just about it.
+
+`/ariel status` and `/ariel spawn` are the first commands that act on the fleet,
+each authorized on the person's role and the channel's ceiling and audited in
+gonzalo. `arield` also has a voice at last: it writes its log to stderr, so a
+refused token or a throttled bot is visible instead of silently dropped. The
+whole path — link, spawn, notify, status — now runs in CI against prosperod's
+and gonzalod's own server code, and was confirmed by hand in a real Discord
+guild against the home cluster.
+
 ### Added
 
 - `/ariel status` summarizes the workspaces a channel follows, and
-  `/ariel spawn <workspace> <prompt>` starts an agent (#20). Both are
+  `/ariel spawn <workspace> <prompt>` starts an agent (#20 — [#51]). Both are
   authorized on the person's role and the channel's ceiling; every spawn is
   audited, and prosperod errors reach the person as plain sentences
   ([Chat Commands](docs/guide/src/commands.md)).
-- A headless end-to-end smoke test in its own CI job (#21): the bridge against
+- A headless end-to-end smoke test in its own CI job (#21 — [#52]): the bridge
+  against
   prosperod's and gonzalod's own server code, with token authentication on and
   prospero's fake caliban for agents, covering linking, a spawn from chat, its
   notification to the finish, and fleet status.
@@ -26,10 +39,11 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 - `arield` now writes its log to stderr, so it shows up in `kubectl logs`. Before
   this, every warning and error was silently dropped, including prosperod
-  refusing Ariel's token and the chat platform rate-limiting it (#49).
+  refusing Ariel's token and the chat platform rate-limiting it (#49 — [#50]).
   `RUST_LOG` sets the level and `ARIEL_LOG_FORMAT=json` switches to JSON lines.
 - `arield` checks its prosperod token at startup whenever `ARIEL_PROSPERO_URL`
-  is set, even if gonzalod or the chat provider is not configured yet (#49).
+  is set, even if gonzalod or the chat provider is not configured yet
+  (#49 — [#50]).
 
 ## [0.1.0] - 2026-09-17
 
@@ -88,7 +102,8 @@ Not in this release: the fleet commands themselves (`/ariel status`,
   `ariel-core` pulls in no chat SDK, and an 85% line-coverage floor (#10 —
   [#25]).
 
-[Unreleased]: https://github.com/caliban-ai/ariel/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/caliban-ai/ariel/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/caliban-ai/ariel/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/caliban-ai/ariel/releases/tag/v0.1.0
 [#24]: https://github.com/caliban-ai/ariel/pull/24
 [#25]: https://github.com/caliban-ai/ariel/pull/25
@@ -106,3 +121,6 @@ Not in this release: the fleet commands themselves (`/ariel status`,
 [#44]: https://github.com/caliban-ai/ariel/pull/44
 [#45]: https://github.com/caliban-ai/ariel/pull/45
 [#47]: https://github.com/caliban-ai/ariel/pull/47
+[#50]: https://github.com/caliban-ai/ariel/pull/50
+[#51]: https://github.com/caliban-ai/ariel/pull/51
+[#52]: https://github.com/caliban-ai/ariel/pull/52
