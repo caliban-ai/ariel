@@ -12,6 +12,13 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ### Added
 
+- `/ariel channel` shows a channel's configuration, `/ariel configure` changes
+  it, and `/ariel invite` mints a one-time link token (#58) — so adding a
+  channel or onboarding someone no longer needs access to gonzalod. Both
+  changing commands need `admin` and are audited. An invite's reply is always
+  private, and on a platform that cannot answer privately it mints nothing;
+  nobody can invite above the role they act with. The CLI and the chat command
+  now share one parser, so they write the same record.
 - `/ariel kill <agent>` stops an agent and `/ariel respawn <agent>` restarts it
   from the prompt it was given, naming the restarted agent's new id (#57). Both
   need an operator in the agent's own workspace: the agent is looked up in the

@@ -10,6 +10,9 @@ Discord each subcommand is a typed slash command with its own options.
 | `/ariel spawn <workspace> <prompt>` | `operator` for that workspace | Starts an agent in `workspace` with `prompt`, and replies with its id. The channel's live notifications take it from there. |
 | `/ariel kill <agent>` | `operator` for the agent's workspace | Stops an agent. |
 | `/ariel respawn <agent>` | `operator` for the agent's workspace | Restarts an agent from the prompt it was given. The restarted agent has a **new id**, which the reply names. |
+| `/ariel channel` | `viewer` | Shows what this channel follows, hears and allows. |
+| `/ariel configure [follows] [notify] [ceiling]` | `admin` | Changes this channel's configuration, the same fields as `ariel channel set`. Audited, and a concurrent edit is reported rather than overwritten. |
+| `/ariel invite <role> [workspace] [hours]` | `admin` | Mints a one-time link token to hand to someone, who redeems it with `/ariel link`. |
 
 `kill` and `respawn` name an agent rather than a workspace, so Ariel looks the
 agent up in the fleet first and authorizes against the workspace it is in. An
@@ -36,6 +39,24 @@ channel with a `viewer` ceiling can run `/ariel status` but not `/ariel spawn`.
   but `/ariel status` covers the fleet the channel follows, so it needs a
   fleet-wide grant.
 - **Your chat account must be linked.** An unlinked account is told how to link.
+
+## Administering a channel from chat
+
+`/ariel configure` and `/ariel invite` do from chat what `ariel channel set` and
+`ariel link new` do from a terminal, so adding a channel or onboarding someone
+no longer needs access to gonzalod ([The `ariel` CLI](./cli.md)). Both need
+`admin`, so a channel whose ceiling is `operator` cannot reconfigure itself —
+which is the point of the ceiling.
+
+Two things worth knowing:
+
+- **Bootstrapping is still a CLI job.** Commands only work in a configured
+  channel, so the first channel has to be created with `ariel channel set`.
+- **An invite's token is private or it does not exist.** The reply carries a
+  live secret, so it is always private. On a chat platform that can neither
+  reply ephemerally nor send a direct message, `/ariel invite` refuses and mints
+  nothing, rather than minting a token Ariel cannot hand over safely. Nobody can
+  invite at a role above the one they act with in that channel.
 
 ## Replies
 

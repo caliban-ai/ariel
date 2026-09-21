@@ -302,23 +302,15 @@ fn open(args: &StoreArgs) -> Result<Records, CliError> {
 }
 
 /// `fleet`, or a comma-separated list of workspace names.
+///
+/// The parsing itself lives in `ariel_core::channels`, so `ariel channel set`
+/// and `/ariel configure` read the same words into the same record (#58).
 fn parse_follows(spec: &str) -> Result<Follows, CliError> {
-    if spec.trim().eq_ignore_ascii_case("fleet") {
-        return Ok(Follows::Fleet);
-    }
-    let names: Vec<&str> = spec
-        .split(',')
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .collect();
-    Follows::workspaces(names).map_err(|_| CliError::NoWorkspaces)
+    channels::parse_follows(spec).map_err(|_| CliError::NoWorkspaces)
 }
 
 fn follows_line(follows: &Follows) -> String {
-    match follows {
-        Follows::Fleet => "fleet".to_owned(),
-        Follows::Workspaces { names } => names.iter().cloned().collect::<Vec<_>>().join(", "),
-    }
+    channels::follows_line(follows)
 }
 
 fn describe(config: &ChannelConfig) -> String {

@@ -89,6 +89,80 @@ pub enum ChannelsError {
     /// makes `follows` required and gives it no default.
     #[error("a new channel must say what it follows")]
     FollowsRequired,
+    #[error("name at least one workspace, or `fleet`")]
+    NoWorkspaces,
+}
+
+/// `fleet`, or a comma-separated list of workspace names.
+///
+/// Shared by the CLI and the chat command so both write the same record from
+/// the same words.
+///
+/// # Errors
+///
+/// A list with no names in it: a channel that follows nothing would hear
+/// nothing (ADR 0009).
+pub fn parse_follows(spec: &str) -> Result<Follows, ChannelsError> {
+    if spec.trim().eq_ignore_ascii_case("fleet") {
+        return Ok(Follows::Fleet);
+    }
+    let names: Vec<&str> = spec
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .collect();
+    Follows::workspaces(names).map_err(|_| ChannelsError::NoWorkspaces)
+}
+
+/// How [`parse_follows`] writes a `follows` back out.
+#[must_use]
+pub fn follows_line(follows: &Follows) -> String {
+    match follows {
+        Follows::Fleet => "fleet".to_owned(),
+        Follows::Workspaces { names } => names.iter().cloned().collect::<Vec<_>>().join(", "),
+    }
+}
+
+/// `all`, `terminal` or `failures`.
+#[must_use]
+pub fn parse_notify(spec: &str) -> Option<NotifyPreset> {
+    match spec.trim().to_ascii_lowercase().as_str() {
+        "all" => Some(NotifyPreset::All),
+        "terminal" => Some(NotifyPreset::Terminal),
+        "failures" => Some(NotifyPreset::Failures),
+        _ => None,
+    }
+}
+
+/// `viewer`, `operator` or `admin`.
+#[must_use]
+pub fn parse_role(spec: &str) -> Option<FleetRole> {
+    match spec.trim().to_ascii_lowercase().as_str() {
+        "viewer" => Some(FleetRole::Viewer),
+        "operator" => Some(FleetRole::Operator),
+        "admin" => Some(FleetRole::Admin),
+        _ => None,
+    }
+}
+
+/// How a role reads in a reply or on the command line.
+#[must_use]
+pub fn role_name(role: FleetRole) -> &'static str {
+    match role {
+        FleetRole::Viewer => "viewer",
+        FleetRole::Operator => "operator",
+        FleetRole::Admin => "admin",
+    }
+}
+
+/// How a notify preset reads in a reply or on the command line.
+#[must_use]
+pub fn notify_name(notify: NotifyPreset) -> &'static str {
+    match notify {
+        NotifyPreset::All => "all",
+        NotifyPreset::Terminal => "terminal",
+        NotifyPreset::Failures => "failures",
+    }
 }
 
 /// The channel's configuration, or `None` if it has none.

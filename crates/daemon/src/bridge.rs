@@ -197,10 +197,14 @@ pub async fn run(
     if let Err(error) = provider.register_commands(commands::ALL).await {
         tracing::warn!(%error, "could not register chat commands");
     }
+    let capabilities = provider.capabilities();
     let context = commands::Context {
         records: records.clone(),
         prospero: prospero.clone(),
         dashboard: notify.dashboard.clone(),
+        // A token must never be posted where the channel can read it, so
+        // `/ariel invite` needs one of these (ADR 0006).
+        private_replies: capabilities.ephemeral_replies || capabilities.direct_messages,
     };
     let commands = tokio::spawn(dispatch(provider.clone(), context));
 
