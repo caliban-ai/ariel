@@ -81,9 +81,10 @@ and `/ariel spawn` go through them.
   (`ARIEL_CHANNEL_RELOAD_SECS`, 60s by default), so a channel added, retired or
   re-scoped takes effect without a restart. A failed read keeps the channels
   already served rather than dropping them.
-- Registers `/ariel link`, `/ariel status` and `/ariel spawn`. Link answers
-  privately, linking the account and granting the token's role; status and spawn
-  are authorized on two keys, and every spawn is audited
+- Registers every `/ariel` command: `link`, `status`, `spawn`, `kill`,
+  `respawn`, `channel`, `configure` and `invite`. Link answers privately,
+  linking the account and granting the token's role; the rest are authorized on
+  two keys, and every command that changes something is audited
   ([Chat Commands](./commands.md)).
 - Does not replay what it missed across a restart
   ([ADR 0011](./adr/0011-no-replay-after-a-restart.md)).

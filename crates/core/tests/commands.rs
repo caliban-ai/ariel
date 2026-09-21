@@ -201,6 +201,7 @@ impl Harness {
             records: records.clone(),
             prospero,
             dashboard: Some("https://prospero.example/".parse().unwrap()),
+            private_replies: true,
         };
         Self {
             _dir: dir,
@@ -305,6 +306,37 @@ impl Harness {
 
     async fn on_agent(&mut self, command: &str, agent: &str) -> (Visibility, Message) {
         self.run(command, &[("agent", agent)]).await
+    }
+
+    /// The channel's stored configuration, if it has one.
+    async fn stored_channel(&self) -> Option<ChannelConfig> {
+        let key = ChannelConfig::key_for("console", "t1", "ops").unwrap();
+        self.records
+            .get::<ChannelConfig>(&key)
+            .await
+            .unwrap()
+            .map(|stored| stored.value)
+    }
+
+    /// Every link token stored, minted by whatever means.
+    async fn link_tokens(&self) -> Vec<ariel_core::records::gonzalo::LinkToken> {
+        let mut tokens = Vec::new();
+        for key in self
+            .records
+            .list::<ariel_core::records::gonzalo::LinkToken>()
+            .await
+            .unwrap()
+        {
+            if let Some(stored) = self
+                .records
+                .get::<ariel_core::records::gonzalo::LinkToken>(&key)
+                .await
+                .unwrap()
+            {
+                tokens.push(stored.value);
+            }
+        }
+        tokens
     }
 
     async fn audit(&self) -> Vec<AuditEntry> {
@@ -656,11 +688,28 @@ async fn an_unknown_command_gets_a_private_answer() {
 #[test]
 fn every_command_is_registered_once() {
     let names: Vec<_> = commands::ALL.iter().map(|spec| spec.name).collect();
-    assert_eq!(names, ["link", "status", "spawn", "kill", "respawn"]);
+    assert_eq!(
+        names,
+        [
+            "link",
+            "status",
+            "spawn",
+            "kill",
+            "respawn",
+            "channel",
+            "configure",
+            "invite"
+        ]
+    );
     assert_eq!(commands::STATUS.min_role, Role::Viewer);
     assert_eq!(commands::SPAWN.min_role, Role::Operator);
     assert_eq!(commands::KILL.min_role, Role::Operator);
     assert_eq!(commands::RESPAWN.min_role, Role::Operator);
+    assert_eq!(commands::CHANNEL.min_role, Role::Viewer);
+    // Changing a channel's configuration requires admin (ADR 0009), and
+    // minting a grant cannot need less than the grant it hands out.
+    assert_eq!(commands::CONFIGURE.min_role, Role::Admin);
+    assert_eq!(commands::INVITE.min_role, Role::Admin);
 }
 
 // --- /ariel kill and /ariel respawn (#57) ---------------------------------
@@ -821,5 +870,185 @@ async fn a_prosperod_failure_on_kill_is_readable_and_audited() {
     assert!(
         reply.body.contains("supervisor crashed"),
         "prosperod's own words reach the person: {reply:?}"
+    );
+}
+
+// --- /ariel channel, /ariel configure and /ariel invite (#58) --------------
+
+#[tokio::test]
+async fn channel_shows_what_the_channel_follows_hears_and_allows() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Viewer, Role::Operator).await;
+
+    let (visibility, reply) = harness.run("channel", &[]).await;
+
+    assert_eq!(visibility, Visibility::Public);
+    assert_eq!(reply.title.as_deref(), Some("Channel configuration"));
+    let field = |name: &str| {
+        reply
+            .fields
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.clone())
+            .unwrap_or_else(|| panic!("no {name} field in {reply:?}"))
+    };
+    assert_eq!(field("follows"), "fleet");
+    assert_eq!(field("hears"), "all");
+    assert_eq!(field("ceiling"), "operator");
+    assert!(harness.audit().await.is_empty(), "showing is not audited");
+}
+
+#[tokio::test]
+async fn configuring_needs_admin_and_is_audited() {
+    for role in ROLES {
+        let mut harness = Harness::new(Prosperod::Normal).await;
+        harness.fleet_channel(role, Role::Admin).await;
+
+        let (visibility, reply) = harness.run("configure", &[("notify", "failures")]).await;
+
+        let audit = harness.audit().await;
+        if role == Role::Admin {
+            assert_eq!(visibility, Visibility::Public, "{reply:?}");
+            assert_eq!(
+                harness.stored_channel().await.unwrap().notify,
+                NotifyPreset::Failures
+            );
+            assert!(
+                audit.iter().any(|entry| entry.action == "command.configure"
+                    && entry.result == AuditResult::Succeeded),
+                "{audit:?}"
+            );
+            assert!(
+                audit.iter().any(|entry| entry.action == "channel.update"),
+                "{audit:?}"
+            );
+        } else {
+            assert_eq!(visibility, Visibility::Private, "{reply:?}");
+            assert!(reply.body.contains("needs **admin**"), "{reply:?}");
+            assert_eq!(
+                harness.stored_channel().await.unwrap().notify,
+                NotifyPreset::All,
+                "a denied configure changed the record"
+            );
+            assert!(
+                audit.iter().any(|entry| entry.action == "command.configure"
+                    && entry.result == AuditResult::Denied),
+                "{audit:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn configuring_rejects_values_it_does_not_understand() {
+    let cases = [
+        (vec![("notify", "sometimes")], "all`, `terminal"),
+        (vec![("ceiling", "root")], "viewer`, `operator"),
+        (vec![("follows", " , ")], "at least one workspace"),
+        (vec![], "Name something to change"),
+    ];
+    for (args, expected) in cases {
+        let mut harness = Harness::new(Prosperod::Normal).await;
+        harness.fleet_channel(Role::Admin, Role::Admin).await;
+
+        let (visibility, reply) = harness.run("configure", &args).await;
+
+        assert_eq!(visibility, Visibility::Private, "{args:?}");
+        assert!(reply.body.contains(expected), "{args:?}: {reply:?}");
+        assert!(
+            harness.audit().await.is_empty(),
+            "nothing was attempted: {args:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn inviting_answers_privately_with_a_token_that_works_once() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Admin, Role::Admin).await;
+
+    let (visibility, reply) = harness.run("invite", &[("role", "operator")]).await;
+
+    assert_eq!(
+        visibility,
+        Visibility::Private,
+        "a token must never be public"
+    );
+    assert!(reply.body.contains("/ariel link "), "{reply:?}");
+    assert!(reply.body.contains("operator"), "{reply:?}");
+
+    let token = reply
+        .body
+        .rsplit("/ariel link ")
+        .next()
+        .unwrap()
+        .trim_end_matches('`')
+        .trim()
+        .to_owned();
+    let linked = ariel_core::link::redeem(
+        &harness.records,
+        &token,
+        &UserRef::new("console", "t1", "someone-else"),
+        None,
+        NOW + 1,
+    )
+    .await
+    .expect("the token redeems");
+    assert_eq!(linked.role, FleetRole::Operator);
+
+    for entry in harness.audit().await {
+        assert!(
+            !format!("{entry:?}").contains(&token),
+            "the token reached the audit trail"
+        );
+    }
+}
+
+#[tokio::test]
+async fn inviting_cannot_grant_more_than_the_inviter_holds() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Admin, Role::Operator).await;
+
+    let (visibility, reply) = harness.run("invite", &[("role", "admin")]).await;
+
+    assert_eq!(visibility, Visibility::Private);
+    assert!(reply.body.contains("needs **admin**"), "{reply:?}");
+    assert!(harness.link_tokens().await.is_empty());
+}
+
+#[tokio::test]
+async fn inviting_needs_a_role_it_understands() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Admin, Role::Admin).await;
+
+    for args in [
+        vec![],
+        vec![("role", "wizard")],
+        vec![("role", "admin"), ("hours", "0")],
+    ] {
+        let (visibility, reply) = harness.run("invite", &args).await;
+        assert_eq!(visibility, Visibility::Private, "{args:?}");
+        assert!(
+            reply.body.contains("role") || reply.body.contains("hours"),
+            "{args:?}: {reply:?}"
+        );
+    }
+    assert!(harness.link_tokens().await.is_empty());
+}
+
+#[tokio::test]
+async fn a_provider_that_cannot_answer_privately_mints_nothing() {
+    let (prospero, calls) = prosperod(Prosperod::Normal).await;
+    let mut harness = Harness::with_prospero(prospero, calls);
+    harness.context.private_replies = false;
+    harness.fleet_channel(Role::Admin, Role::Admin).await;
+
+    let (visibility, reply) = harness.run("invite", &[("role", "viewer")]).await;
+
+    assert_eq!(visibility, Visibility::Private);
+    assert!(reply.body.contains("ariel link new"), "{reply:?}");
+    assert!(
+        harness.link_tokens().await.is_empty(),
+        "a token was minted that could not be handed over safely"
     );
 }
