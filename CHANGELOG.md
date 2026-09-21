@@ -10,23 +10,35 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-20
+
+Ariel runs the fleet from chat, and takes care of itself while running.
+
+`/ariel kill` and `/ariel respawn` finish the command set, so a stray agent is
+dealt with where it was noticed. `/ariel channel`, `/ariel configure` and
+`/ariel invite` move channel administration and onboarding into chat, which
+previously meant a port-forward to gonzalod and a locally built CLI. A channel
+record written while `arield` runs is now picked up without a restart — the
+first thing the in-cluster install got wrong. And `arield` speaks TLS, so it
+can reach a prosperod through an ingress rather than only across a namespace.
+
 ### Added
 
-- `arield` can reach an `https` prosperod (#60). Its HTTP client was built
-  without TLS, so an `https` URL failed before opening a connection — reaching
-  the fleet from outside the cluster needed a port-forward. TLS goes through
-  rustls with the `ring` provider Ariel already installs for Discord, and
-  verifies against the platform's trust store, which the runtime image already
-  populates. In-cluster plain HTTP is unchanged.
+- `arield` can reach an `https` prosperod (#60 — [#65]). Its HTTP client was
+  built without TLS, so an `https` URL failed before opening a connection —
+  reaching the fleet from outside the cluster needed a port-forward. TLS goes
+  through rustls, verifying against the platform's trust store, which the
+  runtime image already populates. In-cluster plain HTTP is unchanged.
 - `/ariel channel` shows a channel's configuration, `/ariel configure` changes
-  it, and `/ariel invite` mints a one-time link token (#58) — so adding a
+  it, and `/ariel invite` mints a one-time link token (#58 — [#64]) — so adding a
   channel or onboarding someone no longer needs access to gonzalod. Both
   changing commands need `admin` and are audited. An invite's reply is always
   private, and on a platform that cannot answer privately it mints nothing;
   nobody can invite above the role they act with. The CLI and the chat command
   now share one parser, so they write the same record.
 - `/ariel kill <agent>` stops an agent and `/ariel respawn <agent>` restarts it
-  from the prompt it was given, naming the restarted agent's new id (#57). Both
+  from the prompt it was given, naming the restarted agent's new id
+  (#57 — [#63]). Both
   need an operator in the agent's own workspace: the agent is looked up in the
   fleet first, and authorization is against the workspace it is in. A channel
   with no configuration is refused before the fleet is read, so it cannot be
@@ -34,7 +46,8 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ### Fixed
 
-- `arield` now picks up channel configuration changes while it runs (#56). A
+- `arield` now picks up channel configuration changes while it runs
+  (#56 — [#62]). A
   channel record written after startup was invisible until the process
   restarted — adding a chat channel meant restarting the daemon. It re-reads
   the records every `ARIEL_CHANNEL_RELOAD_SECS` (60 by default), starting,
@@ -133,7 +146,8 @@ Not in this release: the fleet commands themselves (`/ariel status`,
   `ariel-core` pulls in no chat SDK, and an 85% line-coverage floor (#10 —
   [#25]).
 
-[Unreleased]: https://github.com/caliban-ai/ariel/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/caliban-ai/ariel/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/caliban-ai/ariel/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/caliban-ai/ariel/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/caliban-ai/ariel/releases/tag/v0.1.0
 [#24]: https://github.com/caliban-ai/ariel/pull/24
@@ -155,3 +169,7 @@ Not in this release: the fleet commands themselves (`/ariel status`,
 [#50]: https://github.com/caliban-ai/ariel/pull/50
 [#51]: https://github.com/caliban-ai/ariel/pull/51
 [#52]: https://github.com/caliban-ai/ariel/pull/52
+[#62]: https://github.com/caliban-ai/ariel/pull/62
+[#63]: https://github.com/caliban-ai/ariel/pull/63
+[#64]: https://github.com/caliban-ai/ariel/pull/64
+[#65]: https://github.com/caliban-ai/ariel/pull/65
