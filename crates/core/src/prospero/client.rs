@@ -44,7 +44,10 @@ pub enum ClientError {
 
 /// A client for one prosperod.
 ///
-/// Speaks plain HTTP; TLS arrives with the deployment decision (#5). With a
+/// Speaks `http` and `https` (#60): TLS through rustls, verifying against the
+/// platform's trust store, which the runtime image populates with
+/// `ca-certificates`. In the cluster both services are plain HTTP on the
+/// namespace network; `https` matters for reaching one through an ingress. With a
 /// token (#46), every request carries it as `Authorization: Bearer`, including
 /// the event stream.
 #[derive(Debug, Clone)]
