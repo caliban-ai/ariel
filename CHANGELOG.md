@@ -12,6 +12,12 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ### Added
 
+- `arield` can reach an `https` prosperod (#60). Its HTTP client was built
+  without TLS, so an `https` URL failed before opening a connection — reaching
+  the fleet from outside the cluster needed a port-forward. TLS goes through
+  rustls with the `ring` provider Ariel already installs for Discord, and
+  verifies against the platform's trust store, which the runtime image already
+  populates. In-cluster plain HTTP is unchanged.
 - `/ariel channel` shows a channel's configuration, `/ariel configure` changes
   it, and `/ariel invite` mints a one-time link token (#58) — so adding a
   channel or onboarding someone no longer needs access to gonzalod. Both
