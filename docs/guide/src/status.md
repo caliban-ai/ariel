@@ -1,7 +1,7 @@
 # Status & Roadmap
 
-Ariel is pre-1.0. The current release is **v0.2.0**, published as
-`ghcr.io/caliban-ai/ariel:0.2.0` for `linux/amd64` and `linux/arm64`; see the
+Ariel is pre-1.0. The current release is **v0.3.0**, published as
+`ghcr.io/caliban-ai/ariel:0.3.0` for `linux/amd64` and `linux/arm64`; see the
 [changelog](https://github.com/caliban-ai/ariel/blob/main/CHANGELOG.md). This page
 lists what the code does today, what is next, and what is blocked. Work is tracked
 on the
