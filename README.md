@@ -2,6 +2,7 @@
 
 [![license](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
 [![guide](https://img.shields.io/badge/guide-caliban--ai.github.io%2Fariel-informational)](https://caliban-ai.github.io/ariel/)
+[![release](https://img.shields.io/badge/release-v0.3.0-blue)](https://github.com/caliban-ai/ariel/releases/tag/v0.3.0)
 
 Ariel is the **chat bridge** for the [Caliban](https://github.com/caliban-ai/caliban)
 agent fleet. It brings fleet notifications, commands, approvals, and conversation
@@ -12,64 +13,77 @@ In *The Tempest*, Ariel is the spirit Prospero sends to carry messages. Here it
 carries them between people in chat and the fleet that
 [Prospero](https://github.com/caliban-ai/prospero) runs.
 
-> **Status: foundation built, not yet wired.** The provider trait, prospero
-> client, renderer and Discord backend exist and are tested, but `arield` does
-> not yet connect them into a running bridge, and no chat commands exist. The
-> identity layer is blocked on upstream work in gonzalo
-> ([#277](https://github.com/caliban-ai/gonzalo/issues/277),
-> [#278](https://github.com/caliban-ai/gonzalo/issues/278)). No release has been
-> tagged. Details: [Status & Roadmap](https://caliban-ai.github.io/ariel/status.html).
+> **Status: running bridge, Discord only.** `arield` watches prosperod's fleet,
+> keeps one live message per agent in every channel configured to follow that
+> agent's workspace, and answers eight `/ariel` commands — authorized on the
+> person's role and the channel's ceiling, audited in gonzalo. The current
+> release is **v0.3.0**, published as
+> [`ghcr.io/caliban-ai/ariel:0.3.0`](https://github.com/caliban-ai/ariel/pkgs/container/ariel)
+> for `linux/amd64` and `linux/arm64`. Approvals and conversational threads are
+> designed and deferred; Slack and Teams are not written.
+> Details: [Status & Roadmap](https://caliban-ai.github.io/ariel/status.html).
 
 ## What works today
 
-- **`ariel-core`**: the `ChatProvider` trait, an in-memory `ConsoleProvider`, and a
-  shared contract suite (`contract-tests` feature) every backend runs; a typed
-  client for prosperod's HTTP and SSE API (fleet, spawn, kill, respawn, input,
-  stream); a `FleetWatcher` that merges prospero's per-agent streams into one
-  fleet-wide feed; and a renderer that turns an agent's state into a chat message.
-- **`ariel-discord`**: a Discord backend on twilight that registers `/ariel` slash
-  commands, receives them over the Gateway, answers within Discord's deadline
-  (auto-deferring), and posts, edits, direct-messages and starts threads. It runs
-  against a real guild through a [manual smoke test](docs/discord-smoke-test.md).
-- **`arield`**: reads credentials from files, reports the chat providers compiled
-  in, serves `GET /healthz`, and stops cleanly on SIGTERM.
-- **`ariel`** (CLI): version only.
-- **Container**: a `Dockerfile` and a release workflow for multi-arch
-  `ghcr.io/caliban-ai/ariel` images on `v*` tags.
+- **Notifications.** `arield` watches the fleet and posts one live message per
+  agent, edited in place as it changes, to every channel that follows its
+  workspace. A burst of five or more spawns collapses into a summary, and sends
+  are paced against the chat platform's own budget.
+- **Chat commands.** `/ariel link`, `/ariel status`, `/ariel spawn`,
+  `/ariel kill`, `/ariel respawn`, `/ariel channel`, `/ariel configure` and
+  `/ariel invite`
+  ([Chat Commands](https://caliban-ai.github.io/ariel/commands.html)). Every
+  command runs at the lower of the person's role and the channel's ceiling, and
+  every command that changes something leaves one audit entry in gonzalo.
+- **Identity.** `ariel link new` mints a one-time token; the person redeems it
+  in chat with `/ariel link`, or an admin hands one out with `/ariel invite`.
+  Only a hash of a token is stored, and it works once.
+- **Channel configuration.** What a channel follows, how much it hears and its
+  command ceiling is a gonzalo record, set from the CLI (`ariel channel set`) or
+  from chat (`/ariel configure`). `arield` re-reads the records every
+  `ARIEL_CHANNEL_RELOAD_SECS` (60 by default), so a channel added, retired or
+  re-scoped needs no restart.
+- **Operations.** Logs to stderr (`RUST_LOG`, `ARIEL_LOG_FORMAT=json`), serves
+  `GET /healthz`, reads every credential from a mounted file, speaks `https` to
+  prosperod and gonzalod, and shuts down cleanly on SIGTERM.
+- **Released as a container.** `ghcr.io/caliban-ai/ariel`, multi-arch, tagged by
+  version and `sha-<commit>` on every `v*` tag. A Helm chart lives in
+  [caliban-ai/helm-charts](https://github.com/caliban-ai/helm-charts).
 
-Next is the MVP walking skeleton ([#22](https://github.com/caliban-ai/ariel/issues/22)):
-daemon wiring and notifications, the gonzalo client, account linking, two-key
-authorization, and `/ariel status` and `/ariel spawn`.
+What is left is in [Status & Roadmap](https://caliban-ai.github.io/ariel/status.html):
+the approvals layer ([#6](https://github.com/caliban-ai/ariel/issues/6)) and
+conversational threads ([#7](https://github.com/caliban-ai/ariel/issues/7)) are
+designed and deferred, and the Slack and Teams backends are not written.
 
 ## How it works
 
 Ariel is a standalone service, a sibling to prospero and gonzalo, so that chat
-platform SDKs, credentials, and rate limiting stay behind one boundary. Parts
-marked *planned* are designed but not yet in code.
+platform SDKs, credentials, and rate limiting stay behind one boundary.
 
 ```
-Discord / Slack / Teams
-        │  Gateway socket (Discord); Slack and Teams planned
-        ▼
+Discord                                   (Slack / Teams: not written)
+   │  Gateway socket (interactions in), REST (messages out)
+   ▼
 ┌──────────────────────────────────────────────────────────┐
 │ arield                                                   │
-│  ChatProvider trait · renderer · prospero client ·       │
-│  fleet watcher                                           │
-│  planned: notifier · router · auth · gonzalo client ·    │
-│           session bridge                                 │
+│  ChatProvider trait · notifier · command router ·        │
+│  two-key authorization · renderer · prospero client ·    │
+│  fleet watcher · gonzalo records client                  │
 └──────────┬───────────────────────────────┬───────────────┘
-           │ HTTP + SSE                    │ records (planned)
+           │ HTTP + SSE                    │ records
            ▼                               ▼
        prosperod                        gonzalod
-  fleet snapshot, per-agent       people, roles, channel
-  streams, spawn, kill, input     config, audit
+  fleet snapshot, per-agent       people, bindings, roles,
+  streams, spawn, kill, input     channel config, link
+                                  tokens, audit
 ```
 
 - **Through prospero.** All fleet control and events go over prospero's public
   HTTP and SSE API. Ariel does not depend on prospero crates; it mirrors the wire
-  types it reads, pinned by golden fixtures.
-- **With gonzalo.** Identity, role grants, channel configuration, and the audit
-  trail are to be gonzalo records. Ariel stores nothing of its own.
+  types it reads, pinned by golden fixtures from prospero v0.8.1.
+- **With gonzalo.** Identity, role grants, channel configuration, link tokens and
+  the audit trail are gonzalo records (gonzalo 0.7.0 or newer). Ariel stores
+  nothing of its own.
 - **To caliban** only indirectly, through prospero.
 
 Chat platforms sit behind one `ChatProvider` trait, and each backend is a
@@ -81,54 +95,89 @@ One bridge at four depths, each shippable on its own:
 
 | Layer | Direction | What it does | State |
 |---|---|---|---|
-| Notifications | out | Agent started, changed status, finished | Watcher and renderer built; paced notifier and wiring next |
-| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | Discord command plumbing built; no commands yet |
-| Approvals | both, narrow | Approve or deny a risky action with buttons | Deferred; blocked on upstream caliban and prospero work |
-| Conversational | both, full | A chat thread is an agent session | Deferred |
+| Notifications | out | Agent started, changed status, finished | **Built** — one live message per agent, burst summaries, paced sends |
+| ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Built** — eight `/ariel` commands, two-key authorized and audited |
+| Approvals | both, narrow | Approve or deny a risky action with buttons | Designed, deferred ([#6](https://github.com/caliban-ai/ariel/issues/6)); needs a permission-request event from caliban and prospero |
+| Conversational | both, full | A chat thread is an agent session | Designed, deferred ([#7](https://github.com/caliban-ai/ariel/issues/7)) |
 
-Commands are to be authorized on two keys: a person's role and a ceiling set on
-the channel. The lower of the two wins.
+Commands are authorized on two keys: a person's role and a ceiling set on the
+channel. The lower of the two wins.
 
 ## Quickstart
 
-```sh
-cargo build --workspace
-cargo test --workspace
+From source:
 
-cargo run -p ariel-daemon --bin arield     # prints compiled providers, serves :8081
+```sh
+cargo build --workspace --exclude ariel-e2e
+cargo test --workspace --exclude ariel-e2e
+
+cargo run -p ariel-daemon --bin arield     # serves :8081; health only until configured
 curl http://127.0.0.1:8081/healthz         # ok
 ```
 
-Container:
+From the published image:
 
 ```sh
-docker build -t ariel:dev .
-docker run --rm --read-only -p 8081:8081 ariel:dev
+docker run --rm --read-only -p 8081:8081 \
+  -v "$PWD/secrets:/run/secrets/ariel:ro" \
+  -e ARIEL_PROSPERO_URL=http://prosperod:7878 \
+  -e ARIEL_GONZALO_URL=http://gonzalod:8080 \
+  -e ARIEL_DISCORD_TOKEN_FILE=/run/secrets/ariel/discord-token \
+  -e ARIEL_GONZALO_TOKEN_FILE=/run/secrets/ariel/gonzalo-token \
+  -e ARIEL_DISCORD_GUILD_ID=123456789 \
+  -e ARIEL_DISCORD_APPLICATION_ID=987654321 \
+  ghcr.io/caliban-ai/ariel:0.3.0
 ```
+
+A bare daemon notifies nothing until a channel has a configuration record and
+your chat account is linked:
+
+```sh
+export ARIEL_GONZALO_URL=http://127.0.0.1:8080
+export ARIEL_GONZALO_TOKEN_FILE=./secrets/gonzalo-token
+
+ariel channel set --provider discord --tenant 123456789 --channel 987654321 \
+  --follows fleet --notify all --ceiling operator
+ariel link new --role operator          # redeem in chat with /ariel link
+```
+
+Full walkthrough: [Getting Started](https://caliban-ai.github.io/ariel/getting-started.html).
 
 ## Configuration
 
-`arield` reads only environment variables:
+`arield` reads only environment variables; credentials are always files
+([full reference](https://caliban-ai.github.io/ariel/configuration.html)):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `ARIEL_HEALTH_ADDR` | `0.0.0.0:8081` | Where `/healthz` is served |
+| `ARIEL_PROSPERO_URL` | unset | prosperod's base URL (`http` or `https`) |
+| `ARIEL_GONZALO_URL` | unset | gonzalod's base URL, where the records live |
 | `ARIEL_DISCORD_TOKEN_FILE` | unset | File holding the Discord bot token |
+| `ARIEL_DISCORD_GUILD_ID` | unset | The guild `/ariel` is registered in |
+| `ARIEL_DISCORD_APPLICATION_ID` | unset | The Discord application answering interactions |
 | `ARIEL_GONZALO_TOKEN_FILE` | unset | File holding the gonzalod bearer token |
+| `ARIEL_PROSPERO_TOKEN_FILE` | unset | File holding the prosperod API token (`operate` scope) |
+| `ARIEL_DASHBOARD_URL` | unset | Linked from every notification |
+| `ARIEL_CHANNEL_RELOAD_SECS` | `60` | How often the channel records are re-read |
+| `ARIEL_HEALTH_ADDR` | `0.0.0.0:8081` | Where `/healthz` is served |
+| `ARIEL_LOG_FORMAT` | `text` | `text` or `json` log lines on stderr |
+| `RUST_LOG` | Ariel at `info`, dependencies at `warn` | `tracing` filter directives |
 
-Credentials are always files, never plain variables. A named file that is
-missing, unreadable or empty stops `arield` at startup. The token files are
-validated but not yet used, since the daemon does not connect to Discord or
-gonzalod yet. See the [configuration reference](https://caliban-ai.github.io/ariel/configuration.html).
+Without `ARIEL_PROSPERO_URL`, `ARIEL_GONZALO_URL` and a complete Discord
+configuration, `arield` serves health only and says so. A named credential file
+that is missing, unreadable or empty stops it at startup.
 
 ## Documentation
 
 - Guide: <https://caliban-ai.github.io/ariel/> (source in [`docs/guide/`](docs/guide/))
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md), also
+  [in the guide](https://caliban-ai.github.io/ariel/changelog.html).
+- API reference: <https://caliban-ai.github.io/ariel/api/>
 - Decisions: [`docs/adr/`](docs/adr/README.md), the architecture decision log.
 - Discord: [`docs/discord-smoke-test.md`](docs/discord-smoke-test.md).
-- Design spec: `docs/superpowers/specs/2026-07-03-ariel-chat-bridge-design.md`
-  in the caliban-ai umbrella workspace.
-- Tracking: [caliban-ai/prospero#67](https://github.com/caliban-ai/prospero/issues/67).
+- Deployment: the `ariel` chart in
+  [caliban-ai/helm-charts](https://github.com/caliban-ai/helm-charts).
+- Tracking: the [caliban-ai board](https://github.com/orgs/caliban-ai/projects/1).
 
 ## License
 
