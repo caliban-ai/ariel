@@ -69,14 +69,18 @@ With no environment set, it logs what it is and serves health checks on
 `0.0.0.0:8081`, but bridges nothing:
 
 ```text
-  INFO arield: arield starting version="0.3.0" providers=["discord"]
-  INFO arield: serving health checks addr=0.0.0.0:8081
-  WARN ariel_daemon::bridge: ARIEL_PROSPERO_URL and ARIEL_GONZALO_URL are not both set; serving health only
+2026-10-03T21:28:21.750483Z  INFO arield: arield starting version="0.3.0" providers=["discord"]
+2026-10-03T21:28:21.750817Z  INFO arield: serving health checks addr=0.0.0.0:8081
+2026-10-03T21:28:21.750840Z  WARN arield: ARIEL_PROSPERO_URL and ARIEL_GONZALO_URL are not both set; serving health only
 ```
 
 ```sh
 curl http://127.0.0.1:8081/healthz     # ok
 ```
+
+`arield` takes no options but `--help` and `--version`; everything else is
+environment. It stops on Ctrl-C or SIGTERM, logging `shutting down` and exiting
+zero.
 
 The log goes to **stderr**, so `kubectl logs` and a local terminal both show it.
 `RUST_LOG` sets the level and `ARIEL_LOG_FORMAT=json` switches to one JSON object
