@@ -85,6 +85,9 @@ readiness probes. The container image exposes port 8081.
 
 Which chat providers exist in a binary is decided by Cargo features, not
 configuration: `ariel-daemon`'s `discord` feature is on by default. `arield`
-prints the list at startup, for example `compiled providers: [discord]`, or
-`compiled providers: []` for a `--no-default-features` build. Choosing which
-compiled provider runs is to be configuration once the daemon is wired.
+names them on its startup log line, `providers=["discord"]`, or `providers=[]`
+for a `--no-default-features` build. Which compiled provider actually runs is
+configuration: today, whether `ARIEL_DISCORD_TOKEN_FILE`,
+`ARIEL_DISCORD_GUILD_ID` and `ARIEL_DISCORD_APPLICATION_ID` are all set. A
+binary built without `discord` has no provider to configure and serves health
+only.
