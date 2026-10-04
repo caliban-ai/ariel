@@ -50,7 +50,7 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain (from rust-toolchain.toml)
         if: steps.changes.outputs.code == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -113,7 +113,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain (from rust-toolchain.toml)
         if: needs.check.outputs.code == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -142,7 +142,7 @@ jobs:
       # llvm-tools-preview provides llvm-cov / llvm-profdata, which cargo-llvm-cov
       # drives (locally a Homebrew toolchain sets LLVM_COV / LLVM_PROFDATA
       # instead — see scripts/coverage.sh).
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain (from rust-toolchain.toml)
         if: needs.check.outputs.code == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:

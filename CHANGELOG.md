@@ -32,6 +32,13 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
   the person who ran the command — the whole loop through a real prosperod and
   a real gonzalod. `router_with_auth` gained an automations argument in v0.9
   (prospero#220), which the test passes `None`.
+- The Rust toolchain is pinned to **1.99.0** in `rust-toolchain.toml`, and the
+  builder image moves from `rust:1.95-bookworm` to `rust:1.99-bookworm` (#68).
+  CI resolved its toolchain at run time, so a new stable release could break a
+  build whose code had not changed — which is what happened to prospero when
+  stable moved 1.97 → 1.99. ariel is more exposed than most, because
+  `crates/e2e` builds prospero from a git tag and so compiles its source too.
+  Upgrading is now a deliberate, reviewable commit.
 
 ## [0.3.0] - 2026-09-20
 
