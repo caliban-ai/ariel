@@ -30,5 +30,5 @@ gonzalo-store-fs = "0.7"
 # prosperod's API and fleet manager, driving prospero's `FakeCaliband`: real
 # agent lifecycle and event streams with no caliban and no model. prospero is
 # not on crates.io, so it comes from its public repository at a release tag.
-prospero-api = { git = "https://github.com/caliban-ai/prospero", tag = "v0.8.1" }
-prospero-core = { git = "https://github.com/caliban-ai/prospero", tag = "v0.8.1", features = ["testkit"] }
+prospero-api = { git = "https://github.com/caliban-ai/prospero", tag = "v0.9.0" }
+prospero-core = { git = "https://github.com/caliban-ai/prospero", tag = "v0.9.0", features = ["testkit"] }

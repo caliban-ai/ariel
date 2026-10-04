@@ -25,6 +25,14 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
   beside the token that is authenticated. Requires prosperod v0.9 or later; an
   older daemon ignores the header and the field simply does not appear.
 
+### Changed
+
+- The end-to-end smoke test runs against prosperod **v0.9.0**, up from v0.8.1,
+  and now asserts that an agent spawned from chat reaches the channel naming
+  the person who ran the command — the whole loop through a real prosperod and
+  a real gonzalod. `router_with_auth` gained an automations argument in v0.9
+  (prospero#220), which the test passes `None`.
+
 ## [0.3.0] - 2026-09-20
 
 Ariel runs the fleet from chat, and takes care of itself while running.
