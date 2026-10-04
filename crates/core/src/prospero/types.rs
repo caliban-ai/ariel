@@ -105,6 +105,18 @@ pub struct FleetEvent {
     /// prosperod observed itself, and from daemons older than v0.8.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
+    /// Who the client behind [`FleetEvent::actor`] said it was acting for
+    /// (prospero v0.9). Ariel holds one token and serves a whole Discord, so
+    /// `actor` names Ariel for every chat spawn and this names the person.
+    ///
+    /// Prosperod does not verify it — it is the client's assertion, recorded
+    /// beside the token that is authenticated. Ariel sends its own person id
+    /// here, so what comes back is an id to resolve, not a display name.
+    ///
+    /// `None` for an agent started outside Ariel, and from daemons older
+    /// than v0.9.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<String>,
 }
 
 /// What happened. Tagged on the wire by an inner `kind` field.

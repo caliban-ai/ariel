@@ -69,6 +69,36 @@ When prosperod itself refuses Ariel's own token, the person is told an
 administrator needs to check it, and `arield` logs an error naming
 `ARIEL_PROSPERO_TOKEN_FILE`.
 
+## Who started an agent
+
+A command that changes the fleet tells prosperod which person it is for, so an
+agent can be traced back to whoever asked for it. Ariel authenticates with one
+`operate` token for the whole chat workspace, so prosperod's own `actor` reads
+`ariel` on every spawn; the person travels beside it, in prospero v0.9's
+`X-Prospero-On-Behalf-Of` header.
+
+The channel sees it on the agent's live message, as a `started by` field
+naming the person. Three things are worth knowing about it:
+
+- **It is an assertion, not a fact prosperod checked.** Prosperod authenticated
+  Ariel's token and cannot verify that the named person asked for anything, so
+  it records the claim beside the credential that made it. Trust it as far as
+  you trust Ariel's token — which is also why a false claim stays attributable.
+  The audit line reads `actor=ariel asserted_on_behalf_of=<person>`.
+- **The person is named, not their id.** What travels is the gonzalo person id;
+  Ariel resolves it to that person's display name before the channel sees it.
+  An id with no person record behind it is shown as it came rather than
+  dropped, so the attribution degrades to something useful rather than to
+  nothing.
+- **An agent started outside Ariel says nothing.** A spawn from the prospero
+  CLI, an automation, or another client carries no person, and its message
+  looks exactly as it did before. The same is true against a prosperod older
+  than v0.9, which ignores the header.
+
+Gonzalo's audit trail records the person for every mutating command either way
+(see below); this is what makes the same attribution visible in prospero and in
+the channel.
+
 ## Audit
 
 Every `/ariel spawn`, `/ariel kill` and `/ariel respawn` leaves exactly one

@@ -35,6 +35,11 @@ pub struct AgentView {
     pub ended_at: Option<String>,
     pub outcome: Option<Outcome>,
     pub gone: bool,
+    /// Who asked for this agent (#59), when prosperod said so: Ariel's own
+    /// person id as the event carried it, replaced by that person's display
+    /// name once the notifier has resolved it. `None` for an agent started
+    /// outside Ariel, which renders exactly as it did before.
+    pub started_by: Option<String>,
 }
 
 impl AgentView {
@@ -49,6 +54,7 @@ impl AgentView {
             ended_at: None,
             outcome: None,
             gone: false,
+            started_by: None,
         }
     }
 
@@ -70,6 +76,9 @@ impl AgentView {
                     return false;
                 }
                 self.started_at = Some(event.ts.clone());
+                // Who the spawning client said it acted for. An agent started
+                // outside Ariel carries nothing here, and says nothing (#59).
+                self.started_by = event.on_behalf_of.clone();
                 true
             }
             EventKind::StatusChanged { to, .. } => {
@@ -180,6 +189,9 @@ pub fn render_agent(view: &AgentView, dashboard: Option<&Url>) -> Message {
     let mut fields = Vec::new();
     if let Some(started) = &view.started_at {
         fields.push(("started".to_owned(), started.clone()));
+    }
+    if let Some(who) = &view.started_by {
+        fields.push(("started by".to_owned(), who.clone()));
     }
     if let Some(ended) = &view.ended_at {
         fields.push(("ended".to_owned(), ended.clone()));

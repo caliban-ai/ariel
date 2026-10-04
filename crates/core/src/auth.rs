@@ -58,6 +58,17 @@ pub enum Decision {
     Denied(Denial),
 }
 
+impl Decision {
+    /// The person this command runs for, when it may run at all. What Ariel
+    /// tells prosperod it is acting for (#59).
+    pub fn person(&self) -> Option<&str> {
+        match self {
+            Decision::Allowed { person, .. } => Some(person),
+            Decision::Denied(_) => None,
+        }
+    }
+}
+
 /// Why a command may not run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Denial {

@@ -275,8 +275,7 @@ async fn spawn(context: &Context, command: &Command) -> (Message, Visibility) {
         Ok(decision) => decision,
     };
 
-    let outcome = context
-        .prospero
+    let outcome = acting_for(context, &decision)
         .spawn(workspace, &SpawnRequest::new(prompt))
         .await;
     let result = match &outcome {
@@ -384,14 +383,14 @@ async fn on_agent(
         Ok(decision) => decision,
     };
 
+    let prospero = acting_for(context, &decision);
     let outcome = if spec.name == KILL.name {
-        context
-            .prospero
+        prospero
             .kill(agent)
             .await
             .map(|()| format!("Killing `{agent}` in `{workspace}`."))
     } else {
-        context.prospero.respawn(agent).await.map(|respawned| {
+        prospero.respawn(agent).await.map(|respawned| {
             format!(
                 "Respawned `{agent}` in `{workspace}` as `{}`.",
                 respawned.agent_id
@@ -744,6 +743,16 @@ fn key_of(channel: &ChannelRef) -> channels::ChannelKey {
         channel.tenant.as_str(),
         &channel.channel,
     )
+}
+
+/// The prospero client to run an allowed command with: one that tells
+/// prosperod which person it is acting for (#59), so the events the command
+/// causes name them rather than only Ariel's token.
+fn acting_for(context: &Context, decision: &Decision) -> ProsperoClient {
+    match decision.person() {
+        Some(person) => context.prospero.on_behalf_of(person),
+        None => context.prospero.clone(),
+    }
 }
 
 /// Whether this channel has a configuration record at all.

@@ -110,6 +110,9 @@ async fn prosperod() -> Prosperod {
         Some(Arc::new(local)),
         manager.store(),
         manager.bus(),
+        // Automations (prospero#220) are a prosperod feature Ariel does not
+        // drive; the smoke test spawns from chat.
+        None,
         AuthState::enabled(tokens, SessionKey::random(), false),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -283,6 +286,29 @@ async fn link_spawn_notify_and_status_through_real_prosperod_and_gonzalod() {
     assert!(
         specs.iter().any(|spec| spec.initial_prompt == PROMPT),
         "caliban never received the prompt: {specs:?}"
+    );
+
+    // The channel can tell whose agent this is (#59). This is the whole loop:
+    // the command named the person on its request, a real prosperod recorded
+    // that beside Ariel's token and sent it back on the event, and the notifier
+    // resolved the person id to the display name linking gave them. Asserting
+    // the name rather than the id is what makes the resolution load-bearing —
+    // the id is a generated string, "ada" is what the account was linked as.
+    let attributed = eventually(&console, "an agent message naming who started it", |log| {
+        agent_messages(log, &agent)
+            .into_iter()
+            .find(|message| message.fields.iter().any(|(name, _)| name == "started by"))
+    })
+    .await;
+    let who = attributed
+        .fields
+        .iter()
+        .find(|(name, _)| name == "started by")
+        .map(|(_, value)| value.clone())
+        .expect("the field is there, it was just matched on");
+    assert_eq!(
+        who, "ada",
+        "the channel was not told who started the agent: {attributed:?}"
     );
 
     // --- 3. the notification follows the agent to the end ---------------------
