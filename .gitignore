@@ -4,5 +4,6 @@
 # mdBook guide: build output, and files the docs workflow generates or fetches.
 /docs/guide/book
 /docs/guide/src/adr/
+/docs/guide/src/changelog.md
 /docs/guide/theme/caliban-ai.css
 /docs/guide/theme/nav.js

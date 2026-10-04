@@ -4,14 +4,19 @@ Discord is Ariel's first chat platform. The backend, `ariel-discord`, is built o
 twilight ([ADR 0010](./adr/0010-discord-library-twilight.md)) and compiled into
 `arield` by the default `discord` feature.
 
-`arield` does not start the Discord backend yet
-([#19](https://github.com/caliban-ai/ariel/issues/19)). Until it does, the way to
-exercise it against a real guild is the smoke-test example below.
+`arield` starts the backend as soon as `ARIEL_DISCORD_TOKEN_FILE`,
+`ARIEL_DISCORD_GUILD_ID` and `ARIEL_DISCORD_APPLICATION_ID` are all set
+([Configuration](./configuration.md)): it registers the `/ariel` commands,
+reads interactions over the Gateway, and posts notifications. The smoke test
+below exercises the backend on its own against a real guild, without a
+prosperod or gonzalod.
 
 ## What the backend does
 
 - **Commands.** Registers one guild slash command, `/ariel`, with a subcommand
-  for each command the core declares. Guild commands update immediately.
+  for each command the core declares — `link`, `status`, `spawn`, `kill`,
+  `respawn`, `channel`, `configure` and `invite` ([Chat Commands](./commands.md)).
+  Guild commands update immediately.
 - **Receiving.** Connects to the Gateway with no privileged intents, since
   interactions arrive without them, and turns `/ariel` interactions into commands
   for the core. Other interactions are ignored.

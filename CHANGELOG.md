@@ -95,7 +95,7 @@ guild against the home cluster.
   `/ariel spawn <workspace> <prompt>` starts an agent (#20 — [#51]). Both are
   authorized on the person's role and the channel's ceiling; every spawn is
   audited, and prosperod errors reach the person as plain sentences
-  ([Chat Commands](docs/guide/src/commands.md)).
+  ([Chat Commands](https://caliban-ai.github.io/ariel/commands.html)).
 - A headless end-to-end smoke test in its own CI job (#21 — [#52]): the bridge
   against
   prosperod's and gonzalod's own server code, with token authentication on and

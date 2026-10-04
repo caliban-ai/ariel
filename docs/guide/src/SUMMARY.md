@@ -15,6 +15,10 @@
 - [Chat Commands](./commands.md)
 - [Discord Setup](./discord.md)
 
+# Changelog
+
+- [Changelog](./changelog.md)
+
 # Architecture Decisions
 
 - [ADR Index](./adr/index.md)
@@ -29,3 +33,6 @@
   - [ADR 0008 · Secrets, deployment, and the boundary around an unauthenticated prosperod](./adr/0008-secrets-deployment-and-network-boundary.md)
   - [ADR 0009 · Channel configuration: what a channel follows, hears, and allows](./adr/0009-channel-config.md)
   - [ADR 0010 · Discord backend on twilight](./adr/0010-discord-library-twilight.md)
+  - [ADR 0011 · A restarted daemon does not replay what it missed](./adr/0011-no-replay-after-a-restart.md)
+  - [ADR 0012 · Command authorization: grant scope, what is mutating, and when it is audited](./adr/0012-command-authorization-and-audit.md)
+  - [ADR 0013 · Ariel authenticates to prosperod with a scoped API token](./adr/0013-ariel-authenticates-to-prosperod.md)
