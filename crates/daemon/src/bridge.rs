@@ -91,13 +91,17 @@ pub async fn routes_for(
 /// so a re-read can tell a changed configuration from an unchanged one.
 type Served = HashMap<ChannelRef, (Route, mpsc::Sender<FleetEvent>)>;
 
-/// Start a notifier for `route`.
+/// Start a notifier for `route`. It reads people from `records` so an agent
+/// started from chat names the person who asked for it (#59).
 fn start(
     provider: &Arc<dyn ChatProvider>,
     route: Route,
     notify: &NotifyConfig,
+    records: &Records,
 ) -> mpsc::Sender<FleetEvent> {
-    Notifier::new(provider.clone(), route, notify.clone()).spawn(CHANNEL_BUFFER)
+    Notifier::new(provider.clone(), route, notify.clone())
+        .with_people(records.clone())
+        .spawn(CHANNEL_BUFFER)
 }
 
 /// Bring the running notifiers in line with the channel records (#56).
@@ -150,7 +154,7 @@ async fn reconcile(
             continue;
         }
         tracing::info!(channel = %channel.channel, "now notifying this channel");
-        let sender = start(provider, route.clone(), notify);
+        let sender = start(provider, route.clone(), notify, records);
         served.insert(channel, (route, sender));
     }
 }
@@ -187,7 +191,7 @@ pub async fn run(
         .into_iter()
         .map(|route| {
             let channel = route.channel().clone();
-            let sender = start(&provider, route.clone(), &notify);
+            let sender = start(&provider, route.clone(), &notify, &records);
             (channel, (route, sender))
         })
         .collect();
@@ -306,7 +310,7 @@ mod tests {
         let mut served: Served = HashMap::new();
         served.insert(
             channel.clone(),
-            (route.clone(), start(&provider, route, &notify)),
+            (route.clone(), start(&provider, route, &notify, &records)),
         );
 
         reconcile(&records, &provider, &notify, &mut served).await;

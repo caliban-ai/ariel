@@ -15,6 +15,7 @@ fn event(ts: &str, kind: EventKind) -> FleetEvent {
         agent_id: "a1".to_owned(),
         kind,
         actor: None,
+        on_behalf_of: None,
     }
 }
 
@@ -301,4 +302,94 @@ fn settled_summary_severity_reflects_how_members_ended() {
     let with_kill = render_summary("caliban", &[done(), killed], None);
     assert_eq!(with_kill.body, "1 done · 0 running · 0 failed · 1 stopped");
     assert_eq!(with_kill.severity, Severity::Warning);
+}
+
+// --- who started the agent (#59) -------------------------------------------
+
+/// What prosperod sends when the spawn named a person: `actor` is still the
+/// token, and `on_behalf_of` carries whoever the client said it acted for. The
+/// notifier has already turned the person id into a display name by the time a
+/// view sees it.
+fn spawned_by(who: &str) -> FleetEvent {
+    FleetEvent {
+        actor: Some("ariel".to_owned()),
+        on_behalf_of: Some(who.to_owned()),
+        ..event("14:02", EventKind::AgentSpawned)
+    }
+}
+
+#[test]
+fn an_agent_started_from_chat_names_the_person_who_asked_for_it() {
+    let mut view = fix_tests();
+
+    assert!(view.apply(&spawned_by("Ada Lovelace")));
+
+    assert_eq!(
+        render_agent(&view, None),
+        Message {
+            title: Some("caliban · fix-tests".to_owned()),
+            body: "spawning".to_owned(),
+            fields: fields(&[("started", "14:02"), ("started by", "Ada Lovelace")]),
+            severity: Severity::Info,
+            link: None,
+            actions: vec![],
+        }
+    );
+}
+
+/// An agent started outside Ariel — by the CLI, by an automation, or by a
+/// prosperod older than v0.9 — renders exactly as it did before.
+#[test]
+fn an_agent_started_outside_ariel_says_nothing_about_who_started_it() {
+    let mut view = fix_tests();
+
+    assert!(view.apply(&FleetEvent {
+        actor: Some("someone-elses-token".to_owned()),
+        on_behalf_of: None,
+        ..event("14:02", EventKind::AgentSpawned)
+    }));
+
+    let message = render_agent(&view, None);
+    assert_eq!(message.fields, fields(&[("started", "14:02")]));
+    assert!(
+        !message.fields.iter().any(|(name, _)| name == "started by"),
+        "{message:?}"
+    );
+}
+
+/// A person id the notifier could not resolve is shown as it came. Saying
+/// `started by a1b2c3` is worse than a name and better than silence, and it
+/// still tells two people's agents apart.
+#[test]
+fn an_unresolved_person_falls_back_to_the_raw_value() {
+    let mut view = fix_tests();
+
+    assert!(view.apply(&spawned_by("a1b2c3")));
+
+    assert_eq!(
+        render_agent(&view, None).fields,
+        fields(&[("started", "14:02"), ("started by", "a1b2c3")])
+    );
+}
+
+/// The attribution belongs to the spawn. A later event carrying someone else —
+/// a kill, say — does not rewrite who started the agent.
+#[test]
+fn a_later_event_does_not_change_who_started_the_agent() {
+    let mut view = fix_tests();
+    view.apply(&spawned_by("Ada Lovelace"));
+
+    view.apply(&FleetEvent {
+        actor: Some("ariel".to_owned()),
+        on_behalf_of: Some("Grace Hopper".to_owned()),
+        ..event("14:09", status(AgentStatus::Spawning, AgentStatus::Killed))
+    });
+
+    let message = render_agent(&view, None);
+    assert!(
+        message
+            .fields
+            .contains(&("started by".to_owned(), "Ada Lovelace".to_owned())),
+        "{message:?}"
+    );
 }

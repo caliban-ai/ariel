@@ -12,7 +12,10 @@ use ariel_core::chat::console::Recorded;
 use ariel_core::chat::{ChannelRef, Destination, ProviderError, Severity};
 use ariel_core::notify::{Notifier, NotifyConfig, Route};
 use ariel_core::prospero::types::{AgentStatus, FleetEvent};
-use ariel_core::records::gonzalo::{ChannelConfig, FleetRole, Follows, NotifyPreset};
+use ariel_core::records::Records;
+use ariel_core::records::gonzalo::{
+    ChannelConfig, FleetRole, Follows, FsStore, Identity, NotifyPreset, Person,
+};
 use support::{ScriptedProvider, crashed, finished, spawned, status};
 
 fn channel() -> ChannelRef {
@@ -466,4 +469,188 @@ fn a_route_addresses_the_channel_its_record_names() {
     );
     assert!(route.follows_workspace("caliban"));
     assert!(!route.follows_workspace("prospero"));
+}
+
+// --- naming the person an agent was started for (#59) ----------------------
+
+/// Records on a scratch directory, as the daemon's gonzalo would be.
+fn people_records(dir: &tempfile::TempDir) -> Records {
+    Records::new(Arc::new(FsStore::new(dir.path())), Identity::new("test"))
+}
+
+/// A notifier that can look people up, as the daemon builds one.
+fn start_with_people(
+    provider: Arc<ScriptedProvider>,
+    route: Route,
+    records: &Records,
+) -> tokio::sync::mpsc::Sender<FleetEvent> {
+    Notifier::new(provider, route, NotifyConfig::default())
+        .with_people(records.clone())
+        .spawn(64)
+}
+
+/// A spawn prosperod attributes to a person: the token is still Ariel's, and
+/// `on_behalf_of` carries the person id Ariel asserted (#59).
+fn spawned_for(workspace: &str, agent: &str, person: &str) -> FleetEvent {
+    FleetEvent {
+        actor: Some("ariel".to_owned()),
+        on_behalf_of: Some(person.to_owned()),
+        ..spawned(workspace, agent)
+    }
+}
+
+/// What the channel was told about who started things, across every post.
+fn started_by(log: &[Recorded]) -> Vec<String> {
+    log.iter()
+        .filter_map(|recorded| match recorded {
+            Recorded::Posted { message, .. } => Some(message),
+            _ => None,
+        })
+        .flat_map(|message| message.fields.iter())
+        .filter(|(name, _)| name == "started by")
+        .map(|(_, value)| value.clone())
+        .collect()
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_agent_started_from_chat_names_the_person_not_their_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = people_records(&dir);
+    records
+        .create(
+            Person::key("ada-l").unwrap(),
+            Person {
+                display_name: "Ada Lovelace".to_owned(),
+                email: None,
+            },
+        )
+        .await
+        .unwrap();
+    let provider = Arc::new(ScriptedProvider::new());
+    let events = start_with_people(
+        provider.clone(),
+        route(follows_caliban(), NotifyPreset::All),
+        &records,
+    );
+
+    events
+        .send(spawned_for("caliban", "a1", "ada-l"))
+        .await
+        .unwrap();
+    quiesce(&provider).await;
+
+    assert_eq!(
+        started_by(&provider.log()),
+        vec!["Ada Lovelace".to_owned()],
+        "the channel was shown a person id rather than a name"
+    );
+}
+
+/// A person id with no record behind it — deleted, or asserted by some other
+/// client — is shown as it came rather than dropped.
+#[tokio::test(start_paused = true)]
+async fn an_unknown_person_is_shown_as_the_id_that_came_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = people_records(&dir);
+    let provider = Arc::new(ScriptedProvider::new());
+    let events = start_with_people(
+        provider.clone(),
+        route(follows_caliban(), NotifyPreset::All),
+        &records,
+    );
+
+    events
+        .send(spawned_for("caliban", "a1", "nobody-here"))
+        .await
+        .unwrap();
+    quiesce(&provider).await;
+
+    assert_eq!(started_by(&provider.log()), vec!["nobody-here".to_owned()]);
+}
+
+/// Two people's agents in one channel are told apart by name.
+#[tokio::test(start_paused = true)]
+async fn two_people_in_one_channel_are_told_apart() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = people_records(&dir);
+    for (id, name) in [("ada-l", "Ada Lovelace"), ("grace-h", "Grace Hopper")] {
+        records
+            .create(
+                Person::key(id).unwrap(),
+                Person {
+                    display_name: name.to_owned(),
+                    email: None,
+                },
+            )
+            .await
+            .unwrap();
+    }
+    let provider = Arc::new(ScriptedProvider::new());
+    let events = start_with_people(
+        provider.clone(),
+        route(follows_caliban(), NotifyPreset::All),
+        &records,
+    );
+
+    events
+        .send(spawned_for("caliban", "a1", "ada-l"))
+        .await
+        .unwrap();
+    advance(Duration::from_secs(3)).await;
+    events
+        .send(spawned_for("caliban", "a2", "grace-h"))
+        .await
+        .unwrap();
+    quiesce(&provider).await;
+
+    let mut seen = started_by(&provider.log());
+    seen.sort();
+    assert_eq!(
+        seen,
+        vec!["Ada Lovelace".to_owned(), "Grace Hopper".to_owned()]
+    );
+}
+
+/// Without people to look up — a notifier built the old way — an attributed
+/// agent still says who started it, as the raw id.
+#[tokio::test(start_paused = true)]
+async fn a_notifier_without_people_still_shows_the_raw_attribution() {
+    let provider = Arc::new(ScriptedProvider::new());
+    let events = start(
+        provider.clone(),
+        route(follows_caliban(), NotifyPreset::All),
+    );
+
+    events
+        .send(spawned_for("caliban", "a1", "ada-l"))
+        .await
+        .unwrap();
+    quiesce(&provider).await;
+
+    assert_eq!(started_by(&provider.log()), vec!["ada-l".to_owned()]);
+}
+
+/// An agent nobody claimed renders as it always did.
+#[tokio::test(start_paused = true)]
+async fn an_unattributed_agent_says_nothing_about_who_started_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = people_records(&dir);
+    let provider = Arc::new(ScriptedProvider::new());
+    let events = start_with_people(
+        provider.clone(),
+        route(follows_caliban(), NotifyPreset::All),
+        &records,
+    );
+
+    events.send(spawned("caliban", "a1")).await.unwrap();
+    quiesce(&provider).await;
+
+    assert!(
+        provider
+            .log()
+            .iter()
+            .any(|recorded| matches!(recorded, Recorded::Posted { .. })),
+        "the agent was posted at all"
+    );
+    assert!(started_by(&provider.log()).is_empty());
 }
