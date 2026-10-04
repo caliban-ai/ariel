@@ -10,7 +10,8 @@ bare daemon into a bridge somebody can use.
 
 To **run** `arield`, nothing but the image and:
 
-- a **prosperod** (prospero v0.8 or newer if its API authentication is on) and a
+- a **prosperod** (prospero v0.8 or newer if its API authentication is on;
+  v0.9 or newer for an agent's message to say who started it) and a
   **gonzalod 0.7.0 or newer**, the first release carrying the access-control
   record kinds Ariel stores ([Configuration](./configuration.md#gonzalo-compatibility));
 - a **Discord bot** in a guild ([Discord Setup](./discord.md)).

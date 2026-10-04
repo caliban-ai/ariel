@@ -18,7 +18,9 @@ a running bridge on Discord:
 - `arield` watches prosperod's fleet and keeps **one live message per agent** in
   every chat channel configured to follow that agent's workspace, editing it in
   place as the agent changes, collapsing bursts into a summary and pacing sends
-  against the platform's own budget;
+  against the platform's own budget — and, for an agent started from chat,
+  naming the person who asked for it
+  ([Who started an agent](./commands.md#who-started-an-agent));
 - it answers **eight `/ariel` commands** — `link`, `status`, `spawn`, `kill`,
   `respawn`, `channel`, `configure` and `invite` — each authorized on the lower
   of the person's role and the channel's ceiling, each mutating one audited in

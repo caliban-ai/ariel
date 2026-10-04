@@ -33,9 +33,11 @@ Discord                                   (Slack / Teams: not written)
 - **Through prospero.** All fleet control and fleet events go over prosperod's
   public HTTP and SSE API. Ariel takes no dependency on prospero crates: it
   mirrors the wire types it reads in `ariel_core::prospero::types`, and golden
-  fixtures written from prospero v0.8.1 pin them
+  fixtures written from prospero v0.8.1 pin them, with v0.9's `on_behalf_of` on
+  the event envelope pinned by its own wire tests
   ([ADR 0005](./adr/0005-mirror-prospero-wire-types.md)). Every enum Ariel matches
-  on has an `Unknown` fallback, so a newer prosperod does not break decoding.
+  on has an `Unknown` fallback, so a newer prosperod does not break decoding, and
+  a field a newer prosperod adds is optional, so an older one still decodes.
   Ariel authenticates with a bearer token from `ARIEL_PROSPERO_TOKEN_FILE`, which
   prosperod requires from v0.8 with API authentication on
   ([ADR 0013](./adr/0013-ariel-authenticates-to-prosperod.md)).
@@ -71,8 +73,16 @@ ingress. `arield` calls `session()` at startup whenever `ARIEL_PROSPERO_URL` is
 set, so a refused or missing token is an error in the log rather than a surprise
 at the first command.
 
-The prosperod releases Ariel targets expose no fleet-wide event stream, only one
-per agent, so `FleetWatcher` builds one: it polls `GET /api/fleet` (every 5 s by
+`on_behalf_of(person)` returns a clone of the client that adds prospero v0.9's
+`X-Prospero-On-Behalf-Of` header to every request it makes. Ariel holds one
+`operate` token for a whole chat workspace, so the token alone cannot tell one
+person's agents from another's; the person id travels beside it and comes back
+on the events those requests emit. A value prosperod would answer `400` to is
+dropped rather than failing the request it rode on — a gonzalo person id never
+is one, but a rejected header would fail the whole command.
+
+Prospero had no fleet-wide event stream when Ariel was written, only one per
+agent, so `FleetWatcher` builds one: it polls `GET /api/fleet` (every 5 s by
 default), opens one SSE stream per agent, and merges them into a single channel.
 Each agent's events arrive in order and exactly once across reconnects, resuming
 from the last delivered `seq`. Agents already terminal on the first poll are
@@ -80,9 +90,10 @@ treated as history and not replayed. Because prosperod only closes a stream afte
 `agent_finished`, the watcher stops listening to a killed or crashed agent after
 a linger (10 s by default).
 
-Prospero has since added a fleet-wide stream on its `main` branch; replacing the
-watcher with it waits on a prospero release carrying it
-([#55](https://github.com/caliban-ai/ariel/issues/55)).
+Prospero v0.9.0 ships `GET /api/fleet/stream`, which carries every stream's
+events on one connection with a fleet-wide cursor as each event's SSE `id:`.
+Replacing the watcher with it is [#55](https://github.com/caliban-ai/ariel/issues/55),
+and is no longer blocked on prospero.
 
 ## Crates
 
@@ -133,8 +144,10 @@ Both halves exist.
 `AgentView` folds `agent_spawned`, `status_changed`, `agent_finished`, and
 `agent_gone` events into an agent's current state and reports whether its message
 changed; `render_agent` and `render_summary` turn that state into
-provider-neutral messages with a severity, fields for start and end time,
-outcome, cost and turns, and an optional dashboard link.
+provider-neutral messages with a severity, fields for the start time, who
+started it, the end time, outcome, cost and turns, and an optional dashboard
+link. The attribution belongs to the spawn: a later event carrying someone
+else — a kill, say — does not rewrite who started the agent.
 
 `Notifier` then holds one per channel. It decides for itself whether it follows
 an event's workspace and whether the channel's notify preset wants that event
@@ -144,6 +157,13 @@ against the provider's advertised `SendBudget`. A rate limit, a lost permission
 or a message somebody deleted is handled rather than fatal. `arield` starts one
 notifier per configured channel and feeds every fleet event to all of them, so
 adding a channel is a record, not a code change.
+
+What arrives on an event is the gonzalo **person id** Ariel asserted, not a
+display name: ids are stable and unique, names change and collide. So the
+notifier resolves it before the channel sees it, reading that person's record
+once and remembering the answer. A failed or unknown lookup is not cached — the
+person may be created later — and the id is shown as it came rather than
+dropped, which still tells two people's agents apart.
 
 ## Commands and authorization
 
@@ -158,6 +178,14 @@ that changes something leaves exactly one audit entry in gonzalo, `Denied` or
 linking, and an unconfigured channel is refused before prosperod is asked
 anything, so it cannot be used to discover which agents exist. The details, and
 the table of who may run what, are in [Chat Commands](./commands.md).
+
+An allowed decision carries the person it is for, and `spawn`, `kill` and
+`respawn` run against a client clone that names them to prosperod, so the fleet
+events a command causes are attributed to the person rather than only to Ariel's
+token ([Who started an agent](./commands.md#who-started-an-agent)). Prosperod
+does not verify the claim — it cannot authenticate someone else's user — so the
+token stays the authenticated identity and a false claim stays attributable to
+the credential that made it.
 
 `/ariel link` is the one command that works in any channel: it redeems a
 one-time token minted by `ariel link new` or `/ariel invite`, binds the chat

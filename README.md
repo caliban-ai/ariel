@@ -29,6 +29,11 @@ carries them between people in chat and the fleet that
   agent, edited in place as it changes, to every channel that follows its
   workspace. A burst of five or more spawns collapses into a summary, and sends
   are paced against the chat platform's own budget.
+- **Attribution.** An agent started from chat says who asked for it: `spawn`,
+  `kill` and `respawn` name the person to prosperod (v0.9's
+  `X-Prospero-On-Behalf-Of`), and its live message carries a `started by` field
+  resolved to that person's display name. An agent started outside Ariel, or
+  against a prosperod older than v0.9, renders exactly as before.
 - **Chat commands.** `/ariel link`, `/ariel status`, `/ariel spawn`,
   `/ariel kill`, `/ariel respawn`, `/ariel channel`, `/ariel configure` and
   `/ariel invite`
@@ -95,7 +100,7 @@ One bridge at four depths, each shippable on its own:
 
 | Layer | Direction | What it does | State |
 |---|---|---|---|
-| Notifications | out | Agent started, changed status, finished | **Built** — one live message per agent, burst summaries, paced sends |
+| Notifications | out | Agent started, changed status, finished | **Built** — one live message per agent naming who started it, burst summaries, paced sends |
 | ChatOps | both | Slash commands to list, spawn, kill, and restart agents | **Built** — eight `/ariel` commands, two-key authorized and audited |
 | Approvals | both, narrow | Approve or deny a risky action with buttons | Designed, deferred ([#6](https://github.com/caliban-ai/ariel/issues/6)); needs a permission-request event from caliban and prospero |
 | Conversational | both, full | A chat thread is an agent session | Designed, deferred ([#7](https://github.com/caliban-ai/ariel/issues/7)) |
