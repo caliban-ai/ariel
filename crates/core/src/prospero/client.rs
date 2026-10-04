@@ -55,7 +55,12 @@ pub struct ProsperoClient {
     base: Url,
     http: Client,
     token: Option<BearerToken>,
+    on_behalf_of: Option<String>,
 }
+
+/// Header by which a client names the person it is acting for (prospero v0.9,
+/// prospero#251). A daemon older than v0.9 ignores it.
+const ON_BEHALF_OF: &str = "X-Prospero-On-Behalf-Of";
 
 /// A prosperod API token. Formats as `[redacted]`, so it cannot reach logs.
 #[derive(Clone)]
@@ -84,6 +89,7 @@ impl ProsperoClient {
             base: url,
             http,
             token: None,
+            on_behalf_of: None,
         })
     }
 
@@ -92,6 +98,26 @@ impl ProsperoClient {
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
         self.token = Some(BearerToken(token.into()));
         self
+    }
+
+    /// This client, telling prosperod that what it does next is for `person`
+    /// (#59).
+    ///
+    /// Ariel holds one `operate` token for a whole Discord, so the token alone
+    /// cannot tell one person's agents from another's. The person id travels as
+    /// a header on every request this clone makes, and comes back on the events
+    /// those requests emit.
+    ///
+    /// Prosperod rejects a blank value, one over 128 characters, or one
+    /// carrying control characters with a `400`. A gonzalo person id is 1–64
+    /// characters of `[A-Za-z0-9_-]` (gonzalo `validate_person_id`), so it can
+    /// never be any of those; anything that somehow is gets dropped rather than
+    /// turning a working spawn into a failed request.
+    #[must_use]
+    pub fn on_behalf_of(&self, person: &str) -> Self {
+        let mut client = self.clone();
+        client.on_behalf_of = usable_subject(person).map(str::to_owned);
+        client
     }
 
     /// `GET /api/session`: who prosperod takes this client to be, or that it
@@ -223,10 +249,15 @@ impl ProsperoClient {
         .await
     }
 
-    /// `request` with the bearer token, when this client has one.
+    /// `request` with the bearer token, when this client has one, and the
+    /// person it acts for, when it was given one.
     fn authorize(&self, request: RequestBuilder) -> RequestBuilder {
-        match &self.token {
+        let request = match &self.token {
             Some(BearerToken(token)) => request.header(AUTHORIZATION, format!("Bearer {token}")),
+            None => request,
+        };
+        match &self.on_behalf_of {
+            Some(person) => request.header(ON_BEHALF_OF, person),
             None => request,
         }
     }
@@ -240,6 +271,17 @@ impl ProsperoClient {
             .extend(segments);
         url
     }
+}
+
+/// `subject` if prosperod will accept it as an on-behalf-of value, trimmed the
+/// way prosperod trims it. Mirrors prospero's `validate_subject` so a value it
+/// would answer `400` to is never sent at all.
+fn usable_subject(subject: &str) -> Option<&str> {
+    let trimmed = subject.trim();
+    let usable = !trimmed.is_empty()
+        && trimmed.chars().count() <= 128
+        && !trimmed.chars().any(char::is_control);
+    usable.then_some(trimmed)
 }
 
 fn with_json(request: RequestBuilder, body: Vec<u8>) -> RequestBuilder {

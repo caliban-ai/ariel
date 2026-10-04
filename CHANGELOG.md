@@ -10,6 +10,29 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+### Added
+
+- An agent started from chat says who started it (#59). Ariel holds one
+  `operate` token for a whole Discord, so prosperod's `actor` read `ariel` for
+  every spawn and a channel could not tell one person's agents from another's.
+  Ariel now names the person on the requests a command makes, using prospero
+  v0.9's `X-Prospero-On-Behalf-Of` header (prospero#251), and the live message
+  gains a `started by` field. The person id that comes back on the event is
+  resolved to their display name; an id with no person behind it is shown as it
+  came, and an agent started outside Ariel renders exactly as before.
+
+  Prosperod does not verify the header — it is Ariel's assertion, recorded
+  beside the token that is authenticated. Requires prosperod v0.9 or later; an
+  older daemon ignores the header and the field simply does not appear.
+
+### Changed
+
+- The end-to-end smoke test runs against prosperod **v0.9.0**, up from v0.8.1,
+  and now asserts that an agent spawned from chat reaches the channel naming
+  the person who ran the command — the whole loop through a real prosperod and
+  a real gonzalod. `router_with_auth` gained an automations argument in v0.9
+  (prospero#220), which the test passes `None`.
+
 ## [0.3.0] - 2026-09-20
 
 Ariel runs the fleet from chat, and takes care of itself while running.

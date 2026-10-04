@@ -239,3 +239,39 @@ fn session_info_decodes_both_shapes() {
         }
     );
 }
+
+/// prospero v0.9 records who the client said it acted for, beside the token
+/// that is authenticated (prospero#251). Both travel on the same event.
+#[test]
+fn an_event_carries_both_the_token_and_the_person_it_acted_for() {
+    let event: FleetEvent = serde_json::from_value(json!({
+        "seq": 1, "ts": "t", "repo": "caliban", "agent_id": "a1",
+        "kind": { "kind": "agent_spawned" },
+        "actor": "ariel",
+        "on_behalf_of": "ada-l"
+    }))
+    .unwrap();
+
+    assert_eq!(event.actor.as_deref(), Some("ariel"), "the credential");
+    assert_eq!(event.on_behalf_of.as_deref(), Some("ada-l"), "the person");
+}
+
+/// A daemon older than v0.9 sends no such field, and an agent started outside
+/// a multi-user client carries none either.
+#[test]
+fn an_event_without_a_person_decodes_and_serializes_without_one() {
+    let event: FleetEvent = serde_json::from_value(json!({
+        "seq": 3, "ts": "t", "repo": "caliban", "agent_id": "a1",
+        "kind": { "kind": "agent_spawned" }, "actor": "ariel"
+    }))
+    .unwrap();
+
+    assert!(event.on_behalf_of.is_none(), "a v0.8 daemon still decodes");
+    assert!(
+        serde_json::to_value(&event)
+            .unwrap()
+            .get("on_behalf_of")
+            .is_none(),
+        "absent on the wire, as prospero writes it"
+    );
+}

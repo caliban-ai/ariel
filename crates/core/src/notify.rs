@@ -19,7 +19,8 @@ use tokio::time::Instant;
 
 use crate::chat::{ChannelRef, ChatProvider, Destination, Message, MessageRef, ProviderError, Url};
 use crate::prospero::types::FleetEvent;
-use crate::records::gonzalo::{ChannelConfig, Follows, NotifyPreset};
+use crate::records::Records;
+use crate::records::gonzalo::{ChannelConfig, Follows, NotifyPreset, Person};
 use crate::render::{AgentView, render_agent, render_summary};
 
 /// Which events a channel hears, and where they go (ADR 0009).
@@ -127,6 +128,7 @@ pub struct Notifier {
     provider: Arc<dyn ChatProvider>,
     route: Route,
     config: NotifyConfig,
+    people: Option<People>,
 }
 
 impl Notifier {
@@ -135,15 +137,74 @@ impl Notifier {
             provider,
             route,
             config,
+            people: None,
         }
+    }
+
+    /// This notifier, naming the person an agent was started for rather than
+    /// showing their person id (#59). Without it, an attributed agent still
+    /// says who started it, as the raw id.
+    #[must_use]
+    pub fn with_people(mut self, records: Records) -> Self {
+        self.people = Some(People::new(records));
+        self
     }
 
     /// Start notifying. Send fleet events to the returned sender; dropping it
     /// stops the notifier.
     pub fn spawn(self, buffer: usize) -> mpsc::Sender<FleetEvent> {
         let (tx, rx) = mpsc::channel(buffer);
-        tokio::spawn(run(self.provider, self.route, self.config, rx));
+        tokio::spawn(run(self.provider, self.route, self.config, self.people, rx));
         tx
+    }
+}
+
+/// Person ids resolved to the names people recognise (#59).
+///
+/// Prosperod hands back the id Ariel asserted, so the channel would otherwise
+/// read `started by a1b2c3`. A spawn is rare and the record is small, so this
+/// reads gonzalo once per person and remembers the answer. A failure or an
+/// unknown id is not cached: the person may be created later, and until then
+/// the id itself is a truthful enough answer.
+#[derive(Debug)]
+struct People {
+    records: Records,
+    names: HashMap<String, String>,
+}
+
+impl People {
+    fn new(records: Records) -> Self {
+        Self {
+            records,
+            names: HashMap::new(),
+        }
+    }
+
+    /// Replace the person id this event carries with that person's display
+    /// name, when there is one to find. Leaves the id in place otherwise, so an
+    /// unresolvable attribution still says something rather than nothing.
+    async fn name(&mut self, event: &mut FleetEvent) {
+        let Some(id) = event.on_behalf_of.as_deref() else {
+            return;
+        };
+        if let Some(known) = self.names.get(id) {
+            event.on_behalf_of = Some(known.clone());
+            return;
+        }
+        let Ok(key) = Person::key(id) else {
+            return;
+        };
+        match self.records.get::<Person>(&key).await {
+            Ok(Some(person)) => {
+                let name = person.value.display_name;
+                self.names.insert(id.to_owned(), name.clone());
+                event.on_behalf_of = Some(name);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(%error, person = id, "could not read a person to name them");
+            }
+        }
     }
 }
 
@@ -261,6 +322,7 @@ async fn run(
     provider: Arc<dyn ChatProvider>,
     route: Route,
     config: NotifyConfig,
+    mut people: Option<People>,
     mut rx: mpsc::Receiver<FleetEvent>,
 ) {
     let now = Instant::now();
@@ -284,7 +346,14 @@ async fn run(
         };
         tokio::select! {
             event = rx.recv() => match event {
-                Some(event) => ingest(&mut state, &route, event),
+                // This notifier's own copy of the event, so naming the person
+                // it is for changes nothing another channel sees.
+                Some(mut event) => {
+                    if let Some(people) = people.as_mut() {
+                        people.name(&mut event).await;
+                    }
+                    ingest(&mut state, &route, event);
+                }
                 None => break,
             },
             () = wait => {}

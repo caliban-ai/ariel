@@ -1,8 +1,8 @@
 //! `/ariel status` and `/ariel spawn` (#20): authorized on two keys, answered in
 //! plain words, and audited when they change the fleet (ADR 0012).
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use ariel_core::chat::console::{ConsoleProvider, Recorded};
 use ariel_core::chat::{
@@ -18,7 +18,7 @@ use ariel_core::records::gonzalo::{
 use ariel_core::records::{Records, Write};
 use axum::Router;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use futures_util::StreamExt;
@@ -47,6 +47,20 @@ struct Stub {
     /// Calls to kill or respawn, counted apart from spawns so a test can prove
     /// a refused command never reached prosperod.
     actions: Arc<AtomicUsize>,
+    /// Who each mutating call said it was for (#59).
+    subjects: Subjects,
+}
+
+/// The `X-Prospero-On-Behalf-Of` of every mutating call, in order.
+type Subjects = Arc<Mutex<Vec<Option<String>>>>;
+
+/// Record the person a request names, as prosperod would.
+fn note_subject(subjects: &Subjects, headers: &HeaderMap) {
+    subjects.lock().unwrap().push(
+        headers
+            .get("x-prospero-on-behalf-of")
+            .map(|value| value.to_str().unwrap().to_owned()),
+    );
 }
 
 async fn fleet(State(stub): State<Stub>) -> Response {
@@ -71,8 +85,13 @@ fn agent(id: &str, status: &str) -> serde_json::Value {
            "started_at": "2026-09-18T00:00:00Z", "isolated": false, "interactive": false})
 }
 
-async fn spawn(State(stub): State<Stub>, Path(workspace): Path<String>) -> Response {
+async fn spawn(
+    State(stub): State<Stub>,
+    Path(workspace): Path<String>,
+    headers: HeaderMap,
+) -> Response {
     stub.spawns.fetch_add(1, Ordering::SeqCst);
+    note_subject(&stub.subjects, &headers);
     if let Some(failure) = failure(stub.mode) {
         return failure;
     }
@@ -113,8 +132,9 @@ fn failure(mode: Prosperod) -> Option<Response> {
 }
 
 /// `POST /api/agents/{id}/kill`, which prosperod accepts without a body.
-async fn kill(State(stub): State<Stub>, Path(agent): Path<String>) -> Response {
+async fn kill(State(stub): State<Stub>, Path(agent): Path<String>, headers: HeaderMap) -> Response {
     stub.actions.fetch_add(1, Ordering::SeqCst);
+    note_subject(&stub.subjects, &headers);
     if let Some(failure) = failure(stub.mode) {
         return failure;
     }
@@ -129,8 +149,13 @@ async fn kill(State(stub): State<Stub>, Path(agent): Path<String>) -> Response {
 }
 
 /// `POST /api/agents/{id}/respawn`: the restarted agent has a new id.
-async fn respawn(State(stub): State<Stub>, Path(_agent): Path<String>) -> Response {
+async fn respawn(
+    State(stub): State<Stub>,
+    Path(_agent): Path<String>,
+    headers: HeaderMap,
+) -> Response {
     stub.actions.fetch_add(1, Ordering::SeqCst);
+    note_subject(&stub.subjects, &headers);
     if let Some(failure) = failure(stub.mode) {
         return failure;
     }
@@ -142,6 +167,7 @@ async fn respawn(State(stub): State<Stub>, Path(_agent): Path<String>) -> Respon
 struct Calls {
     spawns: Arc<AtomicUsize>,
     actions: Arc<AtomicUsize>,
+    subjects: Subjects,
 }
 
 async fn prosperod(mode: Prosperod) -> (ProsperoClient, Calls) {
@@ -155,6 +181,7 @@ async fn prosperod(mode: Prosperod) -> (ProsperoClient, Calls) {
             mode,
             spawns: Arc::clone(&calls.spawns),
             actions: Arc::clone(&calls.actions),
+            subjects: Arc::clone(&calls.subjects),
         });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -297,6 +324,11 @@ impl Harness {
 
     fn spawns(&self) -> usize {
         self.calls.spawns.load(Ordering::SeqCst)
+    }
+
+    /// Who each mutating call told prosperod it was acting for (#59).
+    fn subjects(&self) -> Vec<Option<String>> {
+        self.calls.subjects.lock().unwrap().clone()
     }
 
     /// Kills and respawns that reached prosperod.
@@ -1051,4 +1083,51 @@ async fn a_provider_that_cannot_answer_privately_mints_nothing() {
         harness.link_tokens().await.is_empty(),
         "a token was minted that could not be handed over safely"
     );
+}
+
+// --- telling prosperod who the command is for (#59) ------------------------
+
+#[tokio::test]
+async fn a_spawn_tells_prosperod_which_person_it_is_for() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Operator, Role::Operator).await;
+
+    let (_, reply) = harness.spawn_in("caliban").await;
+
+    assert!(reply.body.contains("is starting"), "{reply:?}");
+    assert_eq!(
+        harness.subjects(),
+        vec![Some(PERSON.to_owned())],
+        "the spawn carried Ariel's token alone, so the fleet cannot tell whose agent it is"
+    );
+}
+
+#[tokio::test]
+async fn a_kill_and_a_respawn_name_the_person_too() {
+    for command in ["kill", "respawn"] {
+        let mut harness = Harness::new(Prosperod::Normal).await;
+        harness.fleet_channel(Role::Operator, Role::Operator).await;
+
+        harness.on_agent(command, "a1").await;
+
+        assert_eq!(
+            harness.subjects(),
+            vec![Some(PERSON.to_owned())],
+            "{command} did not name the person"
+        );
+    }
+}
+
+/// A denied command never reaches prosperod, so it asserts nothing about
+/// anyone.
+#[tokio::test]
+async fn a_denied_command_asserts_nothing() {
+    let mut harness = Harness::new(Prosperod::Normal).await;
+    harness.fleet_channel(Role::Viewer, Role::Viewer).await;
+
+    let (visibility, reply) = harness.spawn_in("caliban").await;
+
+    assert_eq!(visibility, Visibility::Private);
+    assert!(reply.body.contains("needs **operator**"), "{reply:?}");
+    assert!(harness.subjects().is_empty());
 }

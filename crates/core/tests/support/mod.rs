@@ -117,6 +117,7 @@ fn event(workspace: &str, agent: &str, kind: EventKind) -> FleetEvent {
         agent_id: agent.to_owned(),
         kind,
         actor: None,
+        on_behalf_of: None,
     }
 }
 
