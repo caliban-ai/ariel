@@ -1,0 +1,12 @@
+# The toolchain this repository builds with, pinned so a new stable release
+# cannot break a build whose code did not change (#68). Upgrading is a
+# deliberate, reviewable commit.
+#
+# `llvm-tools-preview` is listed alongside the usual two because the coverage
+# job's cargo-llvm-cov needs it on *this* toolchain: CI's
+# `dtolnay/rust-toolchain@stable` installs components onto stable, while cargo
+# in this directory runs the version pinned here.
+[toolchain]
+channel    = "1.99.0"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]
+profile    = "minimal"
