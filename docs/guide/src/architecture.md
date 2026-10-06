@@ -63,6 +63,7 @@ Discord                                   (Slack / Teams: not written)
 | `POST` | `/api/agents/{id}/input` | `input()` |
 | `POST` | `/api/agents/{id}/end-input` | `end_input()` |
 | `GET` | `/api/agents/{id}/stream?from={seq}` | `stream()` (SSE) |
+| `GET` | `/api/fleet/stream?from={cursor\|now}` | `fleet_stream()` (SSE) |
 
 A base URL with a path prefix, as behind a reverse proxy, is kept. Requests time
 out after 30 seconds (the event stream excepted), and connecting after 5. Both
@@ -81,19 +82,29 @@ on the events those requests emit. A value prosperod would answer `400` to is
 dropped rather than failing the request it rode on — a gonzalo person id never
 is one, but a rejected header would fail the whole command.
 
-Prospero had no fleet-wide event stream when Ariel was written, only one per
-agent, so `FleetWatcher` builds one: it polls `GET /api/fleet` (every 5 s by
-default), opens one SSE stream per agent, and merges them into a single channel.
-Each agent's events arrive in order and exactly once across reconnects, resuming
-from the last delivered `seq`. Agents already terminal on the first poll are
-treated as history and not replayed. Because prosperod only closes a stream after
-`agent_finished`, the watcher stops listening to a killed or crashed agent after
-a linger (10 s by default).
+`FleetWatcher` holds **one** connection to `GET /api/fleet/stream`, prospero
+v0.9's fleet-wide stream, and forwards every agent's events from it
+([#55](https://github.com/caliban-ai/ariel/issues/55)). Each event's SSE `id:`
+is a **fleet cursor** — durable insertion order across all streams, which is the
+only total order a fleet has, since a per-agent `seq` cannot order two different
+agents. A dropped connection reconnects with `?from=<cursor>`, which resumes
+strictly after it: no gap, no duplicate.
 
-Prospero v0.9.0 ships `GET /api/fleet/stream`, which carries every stream's
-events on one connection with a fleet-wide cursor as each event's SSE `id:`.
-Replacing the watcher with it is [#55](https://github.com/caliban-ai/ariel/issues/55),
-and is no longer blocked on prospero.
+The first connection asks for `?from=now`, so a restarted daemon announces
+nothing that happened while it was down ([ADR 0011](./adr/0011-no-replay-after-a-restart.md)).
+The cursor lives in memory only — Ariel keeps no state of its own
+([ADR 0003](./adr/0003-no-state-of-its-own.md)) — so a restart begins at `now`
+again rather than resuming. Because the stream is read from prosperod's durable
+store rather than its live bus, there is no slow-consumer `gap` signal to handle,
+unlike the per-agent stream.
+
+Before prospero v0.9 there was no such endpoint, and the watcher built the same
+feed by polling `GET /api/fleet` every 5 s and opening one SSE stream per agent.
+That cost a connection per agent, and it missed any agent that started *and*
+finished between two polls — the channel never heard about it at all. `fleet()`
+is still how `/ariel status` reads a snapshot; it is no longer how Ariel learns
+that something happened. `stream()` remains on the client, since it mirrors a
+route prosperod still serves, but nothing in Ariel listens to it.
 
 ## Crates
 

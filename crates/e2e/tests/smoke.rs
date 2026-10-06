@@ -232,8 +232,7 @@ async fn link_spawn_notify_and_status_through_real_prosperod_and_gonzalod() {
             ..NotifyConfig::default()
         },
         watch: WatchConfig {
-            poll_interval: Duration::from_millis(200),
-            ..WatchConfig::default()
+            reconnect_delay: Duration::from_millis(100),
         },
         channel_reload: bridge::CHANNEL_RELOAD,
     };
