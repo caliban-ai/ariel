@@ -10,6 +10,20 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-06
+
+Ariel says whose agent it is, and stops missing the quick ones.
+
+A channel could see that an agent started but not whose it was: Ariel holds one
+`operate` token for a whole Discord, so every spawn was attributed to `ariel`.
+Agents now carry the person who asked for them, from the chat command through
+prosperod to the live message. And the notifier no longer polls: it watches
+prospero's fleet-wide stream, so an agent that starts and finishes between two
+old five-second polls — previously invisible — is announced like any other.
+
+**This release needs prosperod v0.9 or later.** The fleet stream is where every
+notification now comes from, and a v0.8 daemon does not serve it.
+
 ### Added
 
 - An agent started from chat says who started it (#59). Ariel holds one
@@ -56,6 +70,9 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
   stable moved 1.97 → 1.99. ariel is more exposed than most, because
   `crates/e2e` builds prospero from a git tag and so compiles its source too.
   Upgrading is now a deliberate, reviewable commit.
+
+Docs: the README and the guide were brought up to v0.3.0, which had drifted
+behind the commands and configuration that shipped in it (#67).
 
 ## [0.3.0] - 2026-09-20
 
@@ -193,7 +210,8 @@ Not in this release: the fleet commands themselves (`/ariel status`,
   `ariel-core` pulls in no chat SDK, and an 85% line-coverage floor (#10 —
   [#25]).
 
-[Unreleased]: https://github.com/caliban-ai/ariel/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/caliban-ai/ariel/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/caliban-ai/ariel/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/caliban-ai/ariel/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/caliban-ai/ariel/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/caliban-ai/ariel/releases/tag/v0.1.0
