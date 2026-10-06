@@ -1,12 +1,14 @@
 //! Golden tests pinning Ariel's mirrored prospero wire types.
 //!
-//! The fixtures under `fixtures/prospero/` are written from prospero v0.8.1's
+//! The fixtures under `fixtures/prospero/` are written from prospero v0.9.0's
 //! wire contract (`crates/types/src/{model,event,api,auth}.rs`, `crates/api/src/sse/`).
 //! v0.8 added only the optional `actor` on the event envelope and the
-//! `/api/session` route; every other shape is unchanged from v0.7.0.
+//! `/api/session` route; v0.9 added the optional `on_behalf_of` beside `actor`
+//! and the fleet stream, whose frames carry a cursor in the SSE `id:`. Every
+//! other shape is unchanged from v0.7.0.
 //! If prospero changes its wire format, these fail before Ariel misreads it.
 
-use ariel_core::prospero::sse::{FrameDecoder, StreamItem};
+use ariel_core::prospero::sse::{CursoredEvent, FrameDecoder, StreamItem};
 use ariel_core::prospero::types::{
     AgentStatus, EventKind, FleetEvent, FleetSnapshot, GapSignal, OutputStream, Scope, SessionInfo,
     SpawnRequest, SpawnedResponse, WorkspaceHealth,
@@ -16,6 +18,38 @@ use serde_json::{Value, json};
 const FLEET: &str = include_str!("fixtures/prospero/fleet_snapshot.json");
 const EVENTS: &str = include_str!("fixtures/prospero/events.json");
 const STREAM: &str = include_str!("fixtures/prospero/stream.sse");
+const FLEET_STREAM: &str = include_str!("fixtures/prospero/fleet_stream.sse");
+
+#[test]
+fn fleet_stream_frames_carry_a_cursor_and_decode() {
+    let frames = FrameDecoder::new().push(FLEET_STREAM.as_bytes());
+    let items: Vec<CursoredEvent> = frames
+        .iter()
+        .map(|frame| CursoredEvent::from_frame(frame).unwrap().unwrap())
+        .collect();
+
+    // The keepalive comment dispatches nothing, so three events reach Ariel.
+    assert_eq!(items.len(), 3);
+    assert_eq!(
+        items.iter().map(|item| item.cursor).collect::<Vec<_>>(),
+        [Some(4821), Some(4822), Some(4823)]
+    );
+
+    // One connection carries every agent, and the cursor is the only total
+    // order a fleet has: a2's `seq` of 1 sits between a1's 7 and 8.
+    let agents: Vec<&str> = items
+        .iter()
+        .map(|item| item.event.agent_id.as_str())
+        .collect();
+    assert_eq!(agents, ["a1", "a2", "a1"]);
+    assert_eq!(
+        items.iter().map(|item| item.event.seq).collect::<Vec<_>>(),
+        [7, 1, 8]
+    );
+
+    assert_eq!(items[0].event.on_behalf_of.as_deref(), Some("ada"));
+    assert!(items[2].event.kind.ends_stream());
+}
 
 #[test]
 fn fleet_snapshot_decodes() {

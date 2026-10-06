@@ -4,6 +4,7 @@
 //! The daemon reads channel records, watches the fleet, and notifies each
 //! channel that follows the workspace an event came from.
 
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,8 +18,10 @@ use ariel_core::records::gonzalo::{
 use ariel_core::records::{Records, Write};
 use ariel_daemon::bridge::{self, Wiring};
 use axum::Router;
+use axum::body::{Body, Bytes};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use futures_util::{StreamExt, stream};
 use serde_json::json;
 
 /// A prosperod with one workspace, one agent, and a stream that spawns then
@@ -46,14 +49,17 @@ async fn stub_prosperod() -> ProsperoClient {
                 }))
             }),
         )
-        .route("/api/agents/{id}/stream", get(stream_route));
+        .route("/api/fleet/stream", get(fleet_stream_route));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     ProsperoClient::new(&format!("http://{addr}")).unwrap()
 }
 
-async fn stream_route() -> Response {
+/// The fleet stream: a1 spawns, runs and finishes, each event carrying its
+/// fleet cursor as the SSE `id:`. The connection is then held open, as
+/// prosperod holds it — a fleet has no terminal event.
+async fn fleet_stream_route() -> Response {
     let frames = [
         json!({"seq": 0, "ts": "2026-09-15T00:00:00Z", "repo": "caliban", "agent_id": "a1",
                "kind": {"kind": "agent_spawned"}}),
@@ -65,11 +71,20 @@ async fn stream_route() -> Response {
     ];
     let body: String = frames
         .iter()
-        .map(|frame| format!("data: {frame}\n\n"))
+        .enumerate()
+        .map(|(cursor, frame)| format!("id: {cursor}\ndata: {frame}\n\n"))
         .collect();
+    held_stream(body)
+}
+
+/// An event-stream response that sends `body` and then stays open, so the
+/// watcher has no dropped connection to resume from.
+fn held_stream(body: String) -> Response {
+    let body = stream::once(async move { Ok::<_, Infallible>(Bytes::from(body)) })
+        .chain(stream::pending());
     (
         [(axum::http::header::CONTENT_TYPE, "text/event-stream")],
-        body,
+        Body::from_stream(body),
     )
         .into_response()
 }
@@ -145,9 +160,7 @@ async fn an_agent_notifies_only_the_channels_following_its_workspace() {
             ..NotifyConfig::default()
         },
         watch: WatchConfig {
-            poll_interval: Duration::from_millis(20),
             reconnect_delay: Duration::from_millis(20),
-            linger: Duration::from_millis(50),
         },
         channel_reload: bridge::CHANNEL_RELOAD,
     };

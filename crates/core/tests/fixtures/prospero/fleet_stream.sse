@@ -1,0 +1,11 @@
+id: 4821
+data: {"seq":7,"ts":"2026-06-18T00:00:00+00:00","repo":"caliban","agent_id":"a1","kind":{"kind":"agent_spawned"},"actor":"ariel","on_behalf_of":"ada"}
+
+:
+
+id: 4822
+data: {"seq":1,"ts":"2026-06-18T00:00:01+00:00","repo":"caliban","agent_id":"a2","kind":{"kind":"status_changed","from":"running","to":"done"}}
+
+id: 4823
+data: {"seq":8,"ts":"2026-06-18T00:00:02+00:00","repo":"caliban","agent_id":"a1","kind":{"kind":"agent_finished","outcome":"success","cost_usd":0.5,"turns":3}}
+

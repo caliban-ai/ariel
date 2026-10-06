@@ -8,7 +8,7 @@ use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::{Client, RequestBuilder, Response, StatusCode, Url};
 use serde::de::DeserializeOwned;
 
-use super::sse::{FrameDecoder, StreamItem};
+use super::sse::{CursoredEvent, Frame, FrameDecoder, StreamItem};
 use super::types::{
     ApiErrorBody, FleetSnapshot, InputRequest, RespawnedResponse, SessionInfo, SpawnRequest,
     SpawnedResponse,
@@ -192,46 +192,42 @@ impl ProsperoClient {
     {
         let mut url = self.endpoint(&["api", "agents", agent_id, "stream"]);
         url.query_pairs_mut().append_pair("from", &from.to_string());
-        let response = check(
+        Ok(decode(self.open_stream(url).await?, StreamItem::from_frame))
+    }
+
+    /// Every agent's events on one connection, from `from` onward (#55).
+    ///
+    /// prospero v0.9's fleet stream (prospero#219), which replaces polling the
+    /// fleet and holding one connection per agent. Each event carries the
+    /// **fleet cursor** that resumes strictly after it, so a dropped connection
+    /// costs neither a gap nor a duplicate.
+    ///
+    /// Unlike the per-agent stream this one does not end by itself: a fleet has
+    /// no terminal event. It also has no `gap` signal, because prosperod reads
+    /// it from the durable store rather than the live bus.
+    pub async fn fleet_stream(
+        &self,
+        from: FleetFrom,
+    ) -> Result<impl Stream<Item = Result<CursoredEvent, ClientError>> + Send + 'static, ClientError>
+    {
+        let mut url = self.endpoint(&["api", "fleet", "stream"]);
+        url.query_pairs_mut().append_pair("from", &from.to_query());
+        Ok(decode(
+            self.open_stream(url).await?,
+            CursoredEvent::from_frame,
+        ))
+    }
+
+    /// Open an event-stream response, which carries no request timeout because
+    /// it is meant to stay open.
+    async fn open_stream(&self, url: Url) -> Result<Response, ClientError> {
+        check(
             self.authorize(self.http.get(url))
                 .header(ACCEPT, "text/event-stream")
                 .send()
                 .await?,
         )
-        .await?;
-
-        let state = (
-            Box::pin(response.bytes_stream()),
-            FrameDecoder::new(),
-            VecDeque::new(),
-        );
-        Ok(stream::unfold(
-            state,
-            |(mut bytes, mut decoder, mut ready)| async move {
-                loop {
-                    if let Some(item) = ready.pop_front() {
-                        return Some((item, (bytes, decoder, ready)));
-                    }
-                    match bytes.next().await? {
-                        Ok(chunk) => {
-                            for frame in decoder.push(&chunk) {
-                                match StreamItem::from_frame(&frame) {
-                                    Ok(Some(item)) => ready.push_back(Ok(item)),
-                                    Ok(None) => {}
-                                    Err(error) => ready.push_back(Err(ClientError::Json(error))),
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            return Some((
-                                Err(ClientError::Transport(error)),
-                                (bytes, decoder, ready),
-                            ));
-                        }
-                    }
-                }
-            },
-        ))
+        .await
     }
 
     async fn post_empty(&self, segments: &[&str]) -> Result<(), ClientError> {
@@ -271,6 +267,77 @@ impl ProsperoClient {
             .extend(segments);
         url
     }
+}
+
+/// Where a [`fleet_stream`](ProsperoClient::fleet_stream) connection starts.
+///
+/// There is deliberately no "from the beginning": a restarted Ariel replays
+/// nothing ([ADR 0011](../../docs/adr/0011-no-replay-after-a-restart.md)), and
+/// the only other position it ever wants is the one it held before a connection
+/// dropped. Making a full replay unaskable keeps that rule structural rather
+/// than remembered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FleetFrom {
+    /// Only what happens next.
+    Now,
+    /// Strictly after this fleet cursor.
+    After(u64),
+}
+
+impl FleetFrom {
+    /// The `from` query value prosperod expects.
+    fn to_query(self) -> String {
+        match self {
+            Self::Now => "now".to_owned(),
+            Self::After(cursor) => cursor.to_string(),
+        }
+    }
+}
+
+/// Decode an event-stream response into items, one per frame `interpret`
+/// recognizes. An undecodable frame yields [`ClientError::Json`] and the stream
+/// continues; a transport failure ends it.
+fn decode<T, F>(
+    response: Response,
+    interpret: F,
+) -> impl Stream<Item = Result<T, ClientError>> + Send + 'static
+where
+    F: FnMut(&Frame) -> Result<Option<T>, serde_json::Error> + Send + 'static,
+    T: Send + 'static,
+{
+    let state = (
+        Box::pin(response.bytes_stream()),
+        FrameDecoder::new(),
+        VecDeque::new(),
+        interpret,
+    );
+    stream::unfold(
+        state,
+        |(mut bytes, mut decoder, mut ready, mut interpret)| async move {
+            loop {
+                if let Some(item) = ready.pop_front() {
+                    return Some((item, (bytes, decoder, ready, interpret)));
+                }
+                match bytes.next().await? {
+                    Ok(chunk) => {
+                        for frame in decoder.push(&chunk) {
+                            match interpret(&frame) {
+                                Ok(Some(item)) => ready.push_back(Ok(item)),
+                                Ok(None) => {}
+                                Err(error) => ready.push_back(Err(ClientError::Json(error))),
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        return Some((
+                            Err(ClientError::Transport(error)),
+                            (bytes, decoder, ready, interpret),
+                        ));
+                    }
+                }
+            }
+        },
+    )
 }
 
 /// `subject` if prosperod will accept it as an on-behalf-of value, trimmed the

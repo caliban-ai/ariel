@@ -2,12 +2,12 @@
 //!
 //! `arield` re-reads the channel records while it runs, so a channel added,
 //! retired or re-scoped takes effect on a running daemon. The stub prosperod
-//! here hands out a fresh agent on every fleet poll, so "is this channel being
-//! served right now?" is answerable at any moment: served channels keep
-//! collecting posts, and an unserved one stops.
+//! here starts a fresh agent on its fleet stream every few milliseconds, so "is
+//! this channel being served right now?" is answerable at any moment: served
+//! channels keep collecting posts, and an unserved one stops.
 
+use std::convert::Infallible;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use ariel_core::chat::Destination;
@@ -20,9 +20,10 @@ use ariel_core::records::gonzalo::{
 use ariel_core::records::{Records, Write};
 use ariel_daemon::bridge::{self, Wiring};
 use axum::Router;
-use axum::extract::{Path, State};
+use axum::body::{Body, Bytes};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use futures_util::stream;
 use serde_json::json;
 
 /// How often the bridge under test re-reads the channel records.
@@ -31,57 +32,40 @@ const RELOAD: Duration = Duration::from_millis(200);
 /// Long enough for a re-read, a fleet poll, a stream and the notifier's hold.
 const SETTLE: Duration = Duration::from_secs(5);
 
-/// A prosperod whose fleet holds one fresh agent per poll, each of which spawns
-/// and finishes. A channel that is being notified therefore keeps collecting
-/// posts for as long as it is served.
+/// A prosperod whose fleet stream never stops producing agents: a fresh one
+/// spawns and finishes every [`AGENT_EVERY`]. A channel that is being notified
+/// therefore keeps collecting posts for as long as it is served.
 async fn busy_prosperod() -> ProsperoClient {
-    let polls = Arc::new(AtomicUsize::new(0));
-    let app = Router::new()
-        .route("/api/fleet", get(fleet))
-        .route("/api/agents/{id}/stream", get(stream))
-        .with_state(polls);
+    let app = Router::new().route("/api/fleet/stream", get(fleet_stream));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     ProsperoClient::new(&format!("http://{addr}")).unwrap()
 }
 
-async fn fleet(State(polls): State<Arc<AtomicUsize>>) -> Response {
-    let n = polls.fetch_add(1, Ordering::SeqCst);
-    axum::Json(json!({
-        "host": "stub",
-        "workspaces": [{
-            "name": "caliban",
-            "health": {"state": "healthy"},
-            "agents": [{
-                "id": format!("a{n}"),
-                "name": format!("a{n}"),
-                "workspace": "caliban",
-                "status": "spawning",
-                "started_at": "2026-09-20T00:00:00Z",
-                "isolated": false,
-                "interactive": false
-            }]
-        }]
-    }))
-    .into_response()
-}
+/// How often the stub starts another agent.
+const AGENT_EVERY: Duration = Duration::from_millis(50);
 
-async fn stream(Path(id): Path<String>) -> Response {
-    let frames = [
-        json!({"seq": 0, "ts": "2026-09-20T00:00:00Z", "repo": "caliban", "agent_id": id,
-               "kind": {"kind": "agent_spawned"}}),
-        json!({"seq": 1, "ts": "2026-09-20T00:00:01Z", "repo": "caliban", "agent_id": id,
-               "kind": {"kind": "agent_finished", "outcome": "success", "cost_usd": 0.1,
-                        "turns": 1}}),
-    ];
-    let body: String = frames
-        .iter()
-        .map(|frame| format!("data: {frame}\n\n"))
-        .collect();
+async fn fleet_stream() -> Response {
+    let body = stream::unfold(0u64, |n| async move {
+        tokio::time::sleep(AGENT_EVERY).await;
+        let id = format!("a{n}");
+        let spawned = json!({"seq": 0, "ts": "2026-09-20T00:00:00Z", "repo": "caliban",
+                             "agent_id": id, "kind": {"kind": "agent_spawned"}});
+        let finished = json!({"seq": 1, "ts": "2026-09-20T00:00:01Z", "repo": "caliban",
+                              "agent_id": id, "kind": {"kind": "agent_finished",
+                              "outcome": "success", "cost_usd": 0.1, "turns": 1}});
+        // Two events per agent, so the fleet cursor advances by two.
+        let chunk = format!(
+            "id: {}\ndata: {spawned}\n\nid: {}\ndata: {finished}\n\n",
+            n * 2,
+            n * 2 + 1
+        );
+        Some((Ok::<_, Infallible>(Bytes::from(chunk)), n + 1))
+    });
     (
         [(axum::http::header::CONTENT_TYPE, "text/event-stream")],
-        body,
+        Body::from_stream(body),
     )
         .into_response()
 }
@@ -188,9 +172,7 @@ impl Running {
                 ..NotifyConfig::default()
             },
             watch: WatchConfig {
-                poll_interval: Duration::from_millis(50),
                 reconnect_delay: Duration::from_millis(20),
-                linger: Duration::from_millis(50),
             },
             channel_reload: RELOAD,
         };

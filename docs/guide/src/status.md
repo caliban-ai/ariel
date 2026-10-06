@@ -39,7 +39,10 @@ but `/ariel link` goes through them.
   against both `ConsoleProvider` and the Discord backend.
 - `ProsperoClient` for prosperod's fleet, spawn, kill, respawn, input, end-input
   and stream routes; an incremental SSE decoder with gap handling; and
-  `FleetWatcher`, the fleet-wide event feed.
+  `FleetWatcher`, which holds prospero v0.9's fleet-wide stream
+  (`GET /api/fleet/stream`) open and forwards every agent's events from it,
+  resuming after the last fleet cursor when a connection drops
+  ([#55](https://github.com/caliban-ai/ariel/issues/55)).
 - Mirrored prospero wire types pinned by golden fixtures from prospero v0.8.1,
   plus v0.9's `on_behalf_of` on the event envelope, pinned by its own wire tests
   ([ADR 0005](./adr/0005-mirror-prospero-wire-types.md)). Bearer-token
@@ -152,13 +155,6 @@ against prosperod's and gonzalod's own server code, and was confirmed by hand in
 a real Discord guild against the home cluster at v0.2.0. What is open is
 refinement rather than foundation:
 
-- **One fleet-wide event stream** instead of polling plus one SSE stream per
-  agent ([#55](https://github.com/caliban-ai/ariel/issues/55)). `FleetWatcher`
-  polls `GET /api/fleet` and opens one SSE connection per agent, which costs a
-  connection each and can miss an agent that starts and finishes between two
-  polls. prospero **v0.9.0** ships `GET /api/fleet/stream`, whose SSE `id:` is a
-  fleet-wide cursor, so the shim can go — the blocker was a prospero release and
-  that release is out. Not started.
 - **Require the end-to-end smoke job as a status check**
   ([#61](https://github.com/caliban-ai/ariel/issues/61)).
 - Housekeeping: pin the Rust toolchain

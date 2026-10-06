@@ -7,9 +7,10 @@
 //! not a code change.
 //!
 //! **After a restart nothing is replayed.** Ariel stores no cursor
-//! ([ADR 0003](../../docs/adr/0003-no-state-of-its-own.md)): the watcher skips
-//! agents already terminal at startup, and each running agent gets a fresh live
-//! message. Agents that ended while the daemon was down are not notified
+//! ([ADR 0003](../../docs/adr/0003-no-state-of-its-own.md)): the watcher opens
+//! prosperod's fleet stream at `from=now`, so the feed begins with whatever
+//! happens next. An agent gets its fresh live message on its next event, and
+//! anything that happened while the daemon was down is not notified
 //! ([ADR 0011](../../docs/adr/0011-no-replay-after-a-restart.md)).
 
 use std::collections::HashMap;
@@ -239,7 +240,7 @@ pub async fn run(
     }
 
     // Dropping the senders stops each notifier; dropping the receiver stops the
-    // watcher and every agent stream it holds open.
+    // watcher and closes the fleet stream it holds open.
     drop(served);
     drop(events);
     watcher.abort();

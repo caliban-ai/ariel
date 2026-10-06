@@ -27,6 +27,23 @@ release is the container image `ghcr.io/caliban-ai/ariel`, built for
 
 ### Changed
 
+- `arield` watches **one** fleet-wide event stream instead of polling the fleet
+  and holding a connection open per agent (#55). It now reads prospero v0.9's
+  `GET /api/fleet/stream`, whose SSE `id:` is a fleet cursor, and reconnects
+  with `?from=<cursor>` so a dropped connection neither skips an event nor
+  repeats one.
+
+  This fixes a gap rather than only a cost: an agent that started **and**
+  finished between two five-second polls was never seen, so the channel heard
+  nothing about it at all. The first connection asks for `?from=now`, which is
+  ADR 0011's rule stated to prosperod rather than approximated by skipping
+  agents that are already terminal.
+
+  One behaviour changes with it. A restart used to replay each running agent's
+  history, so every running agent got a fresh live message immediately; now one
+  appears on that agent's **next** event. For a working agent that is
+  milliseconds, but an agent sitting idle — waiting on a permission prompt, say
+  — stays invisible until it does something. Requires prosperod v0.9 or later.
 - The end-to-end smoke test runs against prosperod **v0.9.0**, up from v0.8.1,
   and now asserts that an agent spawned from chat reaches the channel naming
   the person who ran the command — the whole loop through a real prosperod and
