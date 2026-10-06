@@ -68,6 +68,32 @@ async fn quiesce(provider: &ScriptedProvider) {
     }
 }
 
+/// [`quiesce`], but waiting for something that is not a timer.
+///
+/// The clock is paused, so `advance` moves virtual time instantly and the whole
+/// of `quiesce` elapses in microseconds of *real* time. That is the point for a
+/// hold or a pace — but a notifier resolving a person id reads a gonzalo
+/// record, and `FsStore` reads through `tokio::fs`, which hands the read to a
+/// blocking thread. No amount of advancing waits for it. On this machine the
+/// read lands before the first advance returns and the tests pass; on a loaded
+/// CI runner it does not, and the event is still sitting in `People::name`
+/// unresolved when the assertion runs — so the channel has no post at all.
+///
+/// So: advance as usual, then give the blocking pool real time, until `done`.
+async fn quiesce_for(provider: &ScriptedProvider, done: impl Fn(&[Recorded]) -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        quiesce(provider).await;
+        if done(&provider.log()) || std::time::Instant::now() >= deadline {
+            return;
+        }
+        // Real time, which `tokio::time::sleep` cannot give under a paused
+        // clock. Blocking this thread is what lets the pool's thread finish.
+        std::thread::sleep(Duration::from_millis(10));
+        tokio::task::yield_now().await;
+    }
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_lone_agent_gets_one_post_edited_in_place() {
     let provider = Arc::new(ScriptedProvider::new());
@@ -537,7 +563,7 @@ async fn an_agent_started_from_chat_names_the_person_not_their_id() {
         .send(spawned_for("caliban", "a1", "ada-l"))
         .await
         .unwrap();
-    quiesce(&provider).await;
+    quiesce_for(&provider, |log| !started_by(log).is_empty()).await;
 
     assert_eq!(
         started_by(&provider.log()),
@@ -563,7 +589,7 @@ async fn an_unknown_person_is_shown_as_the_id_that_came_back() {
         .send(spawned_for("caliban", "a1", "nobody-here"))
         .await
         .unwrap();
-    quiesce(&provider).await;
+    quiesce_for(&provider, |log| !started_by(log).is_empty()).await;
 
     assert_eq!(started_by(&provider.log()), vec!["nobody-here".to_owned()]);
 }
@@ -601,7 +627,7 @@ async fn two_people_in_one_channel_are_told_apart() {
         .send(spawned_for("caliban", "a2", "grace-h"))
         .await
         .unwrap();
-    quiesce(&provider).await;
+    quiesce_for(&provider, |log| started_by(log).len() >= 2).await;
 
     let mut seen = started_by(&provider.log());
     seen.sort();
@@ -643,7 +669,11 @@ async fn an_unattributed_agent_says_nothing_about_who_started_it() {
     );
 
     events.send(spawned("caliban", "a1")).await.unwrap();
-    quiesce(&provider).await;
+    quiesce_for(&provider, |log| {
+        log.iter()
+            .any(|recorded| matches!(recorded, Recorded::Posted { .. }))
+    })
+    .await;
 
     assert!(
         provider
